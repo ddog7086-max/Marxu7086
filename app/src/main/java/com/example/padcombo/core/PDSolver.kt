@@ -8,19 +8,19 @@ import kotlin.math.max
  * must always produce the same route, otherwise the overlay flickers between
  * candidates every frame. 1:1 port of the Swift solver.
  */
-class SplitMix64(seed: Long = 0x9E3779B97F4A7C15L) {
-    private var state: Long = seed
+class SplitMix64(seed: ULong = 0x9E3779B97F4A7C15u) {
+    private var state: ULong = seed
 
-    fun next(): Long {
-        state += 0x9E3779B97F4A7C15L
+    fun next(): ULong {
+        state += 0x9E3779B97F4A7C15u
         var z = state
-        z = (z xor (z ushr 30)) * 0xBF58476D1CE4E5B9L
-        z = (z xor (z ushr 27)) * 0x94D049BB13311EBL
-        return z xor (z ushr 31)
+        z = (z xor (z.toLong() ushr 30).toULong()) * 0xBF58476D1CE4E5B9u
+        z = (z xor (z.toLong() ushr 27).toULong()) * 0x94D049BB13311EBu
+        return z xor (z.toLong() ushr 31).toULong()
     }
 
     /** Uniform double in [0, 1). */
-    fun nextUnit(): Double = (next() ushr 11).toDouble() / 9_007_199_254_740_992.0
+    fun nextUnit(): Double = (next().toLong() ushr 11).toDouble() / 9_007_199_254_740_992.0
 }
 
 data class PDRoute(
@@ -37,7 +37,7 @@ object PDSolver {
         maxLen: Int = 24,
         budgetPerRestart: Int = 1400,
         restarts: Int = 7,
-        seed: Long = 0x5DEECE66D00000001L,
+        seed: ULong = 0x5DEECE66D00000001u,
     ): PDRoute {
         val rng = SplitMix64(seed)
 
@@ -162,7 +162,7 @@ object PDSolver {
 
     private fun SplitMix64.nextInt(until: Int): Int {
         if (until <= 0) return 0
-        return (next().toULong() % until.toULong()).toInt()
+        return (next() % until.toULong()).toInt()
     }
 
     private fun SplitMix64.nextInt(from: Int, until: Int): Int {
