@@ -236,8 +236,8 @@ class PadService : Service() {
         val col = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
         }
-        val kd = resources.displayMetrics.density
-        val panelW = (210 * kd).toInt()
+        val panelKd = resources.displayMetrics.density
+        val panelW = (210 * panelKd).toInt()
         val matchW = android.widget.LinearLayout.LayoutParams(
             android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
             android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
