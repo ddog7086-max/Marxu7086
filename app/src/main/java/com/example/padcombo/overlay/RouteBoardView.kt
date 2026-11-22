@@ -45,6 +45,10 @@ class RouteBoardView : View {
         color = Color.WHITE
         style = Paint.Style.FILL
     }
+    private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(150, 0, 0, 0)
+        style = Paint.Style.FILL
+    }
 
     /** Visibility of the whole route (line / start dot / end arrow), 0..255. */
     var routeAlpha: Int = 245
@@ -136,12 +140,12 @@ class RouteBoardView : View {
             }
 
             val td = resources.displayMetrics.density
-            canvas.drawText(
-                "${route.combos} combo · ${path.size} 格",
-                16f * td,
-                150f * td,
-                textPaint,
-            )
+            val label = "${route.combos} combo · ${path.size} 格"
+            val bx = 16f * td
+            val by = 150f * td
+            val tw = textPaint.measureText(label)
+            canvas.drawRect(bx, by - 24f * td, bx + tw + 16f * td, by + 8f * td, bgPaint)
+            canvas.drawText(label, bx, by, textPaint)
         }
     }
 
