@@ -169,7 +169,10 @@ class PadService : Service() {
             image.close()
         } ?: return
 
-        val board = OrbRecognizer.classify(bitmap, PDBoardRect.FALLBACK)
+        val board = OrbRecognizer.classify(
+            bitmap,
+            PDBoardRect.fit(bitmap.width.toDouble(), bitmap.height.toDouble()),
+        )
         bitmap.recycle()
         if (board == null) return
 
@@ -287,7 +290,7 @@ class PadService : Service() {
             params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
             root.setOnTouchListener(null)
         }
-        overlay?.showGrid = alignMode
+        overlay?.invalidate()
         windowManager.updateViewLayout(root, params)
     }
 

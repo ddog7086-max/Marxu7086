@@ -61,17 +61,19 @@ class RouteBoardView : View {
         super.onDraw(canvas)
 
         // In the main preview the view itself IS the board; on the overlay the
-        // grid maps onto the fixed FALLBACK full-board rectangle on screen.
-        val fb = PDBoardRect.FALLBACK
+        // grid auto-fits a square 6x5 grid onto the lower screen on any device.
+        val fb: PDBoardRect
         val ox: Float
         val oy: Float
         val cellW: Float
         val cellH: Float
         if (showOrbs) {
+            fb = PDBoardRect.FALLBACK
             ox = 0f; oy = 0f
             cellW = width.toFloat() / PDBoard.COLS
             cellH = height.toFloat() / PDBoard.ROWS
         } else {
+            fb = PDBoardRect.fit(width.toDouble(), height.toDouble())
             ox = (fb.x * width).toFloat()
             oy = (fb.y * height).toFloat()
             cellW = (fb.width * width / PDBoard.COLS).toFloat()

@@ -30,6 +30,33 @@ data class PDBoardRect(
         // phones (scaled to screen size, so it adapts to different resolutions).
         // Align mode still allows fine drag/resize if a device differs.
         val FALLBACK = PDBoardRect(0.01, 0.60, 0.985, 0.36)
+
+        /**
+         * Auto-fit a square 6x5 grid inside a container of [containerW] x
+         * [containerH] pixels, horizontally centred and placed in the lower
+         * part of the screen. Because every cell is forced square, all five rows
+         * always fit inside the box on any device (no more row-5 cutoff) and no
+         * manual alignment is needed.
+         */
+        fun fit(containerW: Double, containerH: Double): PDBoardRect {
+            // Prefer width: use 96% of container width for six columns.
+            var cell = containerW * 0.96 / COLS
+            // But cap height so the five rows never exceed the lower half.
+            val maxCellH = containerH * 0.52 / ROWS
+            if (cell > maxCellH) cell = maxCellH
+            val boardW = cell * COLS
+            val boardH = cell * ROWS
+            val x = (containerW - boardW) / 2.0
+            // Sit near the bottom with a small margin; lift slightly for the
+            // system nav bar.
+            val y = (containerH - boardH) - containerH * 0.02
+            return PDBoardRect(
+                x / containerW,
+                y / containerH,
+                boardW / containerW,
+                boardH / containerH,
+            )
+        }
     }
 }
 
