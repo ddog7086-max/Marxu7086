@@ -40,12 +40,12 @@ data class PDBoardRect(
          */
         fun fit(containerW: Double, containerH: Double): PDBoardRect {
             // Prefer width: use 96% of container width for six columns.
-            var cell = containerW * 0.96 / COLS
+            var cell = containerW * 0.96 / PDBoard.COLS
             // But cap height so the five rows never exceed the lower half.
-            val maxCellH = containerH * 0.52 / ROWS
+            val maxCellH = containerH * 0.52 / PDBoard.ROWS
             if (cell > maxCellH) cell = maxCellH
-            val boardW = cell * COLS
-            val boardH = cell * ROWS
+            val boardW = cell * PDBoard.COLS
+            val boardH = cell * PDBoard.ROWS
             val x = (containerW - boardW) / 2.0
             // Sit near the bottom with a small margin; lift slightly for the
             // system nav bar.
