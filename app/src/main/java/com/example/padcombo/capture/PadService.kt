@@ -73,6 +73,7 @@ class PadService : Service() {
     private var lastCells: IntArray? = null
     private var lockedCells: IntArray? = null
     private var lockedRoute: PDRoute? = null
+    private var forceResolve = false
     private var lastAnalysis = 0L
 
     private val analyzeTask = object : Runnable {
@@ -192,10 +193,11 @@ class PadService : Service() {
 
         // Lock onto the first board and keep showing its best combo route. Only
         // re-solve when the board actually changes; a couple of misread cells
-        // (recognition noise) must not flip the route every tick.
+        // (recognition noise) must not flip the route every tick. forceResolve
+        // (manual 重算) bypasses the lock so a re-solve always runs.
         val current = board.cells
         val locked = lockedCells
-        if (locked != null && lockedRoute != null) {
+        if (!forceResolve && locked != null && lockedRoute != null) {
             var diff = 0
             for (i in current.indices) if (current[i] != locked[i]) diff++
             if (diff <= STABLE_CELL_TOLERANCE) return
@@ -204,6 +206,7 @@ class PadService : Service() {
         solverExecutor.execute {
             val route = PDSolver.solve(board)
             mainHandler.post {
+                forceResolve = false
                 lockedCells = current.copyOf()
                 lockedRoute = route
                 overlay?.show(board, route)
@@ -266,6 +269,7 @@ class PadService : Service() {
             setOnClickListener {
                 lockedCells = null
                 lockedRoute = null
+                forceResolve = true
             }
         }
         val row = android.widget.LinearLayout(this).apply {
@@ -294,12 +298,10 @@ class PadService : Service() {
         // touch-through: never sits inside the route box or covers an orb.
         val keyView = ColorKeyView(this)
         val keyBar = FrameLayout(this)
+        val kd = resources.displayMetrics.density
         keyBar.addView(
             keyView,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-            ),
+            FrameLayout.LayoutParams((162 * kd).toInt(), (66 * kd).toInt()),
         )
         val keyParams = WindowManager.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,

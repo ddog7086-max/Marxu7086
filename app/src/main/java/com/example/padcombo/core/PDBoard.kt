@@ -26,7 +26,10 @@ data class PDBoardRect(
     var height: Double,
 ) {
     companion object {
-        val FALLBACK = PDBoardRect(0.01, 0.585, 0.985, 0.31)
+        // Normalised default box covering the whole bottom 6x5 board on most
+        // phones (scaled to screen size, so it adapts to different resolutions).
+        // Align mode still allows fine drag/resize if a device differs.
+        val FALLBACK = PDBoardRect(0.01, 0.60, 0.985, 0.36)
     }
 }
 
