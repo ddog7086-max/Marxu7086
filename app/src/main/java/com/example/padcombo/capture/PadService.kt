@@ -278,7 +278,8 @@ class PadService : Service() {
             setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: android.widget.SeekBar?, p: Int, fromUser: Boolean) {
                     val a = p + 80
-                    overlay?.let { it.routeAlpha = a; it.invalidate() }
+                    view.routeAlpha = a
+                    view.invalidate()
                     sp.edit().putInt(KEY_ALPHA, a).apply()
                 }
                 override fun onStartTrackingTouch(s: android.widget.SeekBar?) {}
