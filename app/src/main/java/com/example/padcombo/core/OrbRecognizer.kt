@@ -1,30 +1,28 @@
 package com.example.padcombo.core
 
 import android.graphics.Bitmap
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 /**
  * Turns a screen bitmap plus a board rectangle into 30 orb colours.
- * Recognition is the weakest link: the reference colours are tuned for the
- * classic six orbs and may need adjusting per theme / device.
- * 1:1 port of OrbRecognizer.swift.
+ *
+ * Colour classification uses HSV hue (colour wheel) instead of RGB Euclidean
+ * distance: the six orbs are saturated pure colours, so their hue angle is a
+ * far more stable feature than raw red/green/blue differences, which drift with
+ * brightness and theme. Low-saturation / too-dark pixels (background, empty)
+ * map to EMPTY.
  */
 object OrbRecognizer {
-    private data class Reference(
-        val color: Int,
-        val r: Double,
-        val g: Double,
-        val b: Double,
-    )
 
-    /** Sampled from the middle of each orb type (0...1 RGB). */
-    private val REFERENCES = listOf(
-        Reference(Orb.FIRE, 0.86, 0.22, 0.18),
-        Reference(Orb.WATER, 0.22, 0.50, 0.92),
-        Reference(Orb.WOOD, 0.35, 0.75, 0.35),
-        Reference(Orb.LIGHT, 0.98, 0.85, 0.25),
-        Reference(Orb.DARK, 0.58, 0.28, 0.72),
-        Reference(Orb.HEART, 0.95, 0.45, 0.60),
-    )
+    /** Target hue angle in degrees (0..360) for each orb. */
+    private const val H_FIRE = 0.0      // red
+    private const val H_WATER = 215.0   // blue
+    private const val H_WOOD = 130.0    // green
+    private const val H_LIGHT = 55.0    // yellow
+    private const val H_DARK = 275.0    // purple
+    private const val H_HEART = 330.0   // pink
 
     fun classify(bitmap: Bitmap, rect: PDBoardRect): PDBoard? {
         val width = bitmap.width
@@ -42,45 +40,81 @@ object OrbRecognizer {
                 val fy = rect.y + rect.height * (row + 0.5) / PDBoard.ROWS
                 val px = (fx * width).toInt()
                 val py = (fy * height).toInt()
-                if (px < 3 || px >= width - 3 || py < 3 || py >= height - 3) continue
+                if (px < 2 || px >= width - 2 || py < 2 || py >= height - 2) continue
 
+                // Average a small 3x3 window around the cell centre to resist
+                // a single noisy pixel / outline anti-aliasing.
                 var r = 0.0
                 var g = 0.0
                 var b = 0.0
-                var samples = 0
-                for (dy in -2..2) {
-                    for (dx in -2..2) {
+                var n = 0
+                for (dy in -1..1) {
+                    for (dx in -1..1) {
                         val pixel = pixels[(py + dy) * width + (px + dx)]
                         r += (pixel shr 16 and 0xFF)
                         g += (pixel shr 8 and 0xFF)
                         b += (pixel and 0xFF)
-                        samples++
+                        n++
                     }
                 }
-                r /= samples * 255.0
-                g /= samples * 255.0
-                b /= samples * 255.0
+                r /= n * 255.0
+                g /= n * 255.0
+                b /= n * 255.0
 
-                cells[PDBoard.index(row, col)] = nearestColor(r, g, b)
+                val (h, s, v) = rgbToHsv(r, g, b)
+                // Desaturated (grey/white) or too dark = no orb here.
+                if (s < 0.18 || v < 0.15) {
+                    cells[PDBoard.index(row, col)] = Orb.EMPTY
+                    continue
+                }
+                cells[PDBoard.index(row, col)] = hueClass(h)
             }
         }
         return PDBoard(cells)
     }
 
-    private fun nearestColor(r: Double, g: Double, b: Double): Int {
+    private fun hueClass(h: Double): Int {
+        val targets = arrayOf(
+            Orb.FIRE to H_FIRE,
+            Orb.WATER to H_WATER,
+            Orb.WOOD to H_WOOD,
+            Orb.LIGHT to H_LIGHT,
+            Orb.DARK to H_DARK,
+            Orb.HEART to H_HEART,
+        )
         var best = Orb.EMPTY
-        var bestDistance = Double.POSITIVE_INFINITY
-        for (ref in REFERENCES) {
-            // Green is weighted slightly higher: heart and fire differ mostly there.
-            val distance = (r - ref.r) * (r - ref.r) +
-                1.4 * (g - ref.g) * (g - ref.g) +
-                (b - ref.b) * (b - ref.b)
-            if (distance < bestDistance) {
-                bestDistance = distance
-                best = ref.color
+        var bestDist = Double.POSITIVE_INFINITY
+        for ((color, targetHue) in targets) {
+            val d = hueDistance(h, targetHue)
+            if (d < bestDist) {
+                bestDist = d
+                best = color
             }
         }
-        // Too far from anything we know: poison / nuisance / empty cell.
-        return if (bestDistance > 1.6) Orb.EMPTY else best
+        return best
+    }
+
+    /** Shortest angular distance on the colour wheel. */
+    private fun hueDistance(a: Double, b: Double): Double {
+        val d = abs(a - b) % 360.0
+        return min(d, 360.0 - d)
+    }
+
+    private fun rgbToHsv(r: Double, g: Double, b: Double): Triple<Double, Double, Double> {
+        val mx = max(r, max(g, b))
+        val mn = min(r, min(g, b))
+        val d = mx - mn
+        val v = mx
+        val s = if (mx == 0.0) 0.0 else d / mx
+        var h = 0.0
+        if (d != 0.0) {
+            h = when (mx) {
+                r -> ((g - b) / d) % 6.0
+                g -> (b - r) / d + 2.0
+                else -> (r - g) / d + 4.0
+            }
+            h = (h * 60.0 + 360.0) % 360.0
+        }
+        return Triple(h, s, v)
     }
 }

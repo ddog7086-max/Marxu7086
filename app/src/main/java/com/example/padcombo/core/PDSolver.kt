@@ -32,15 +32,41 @@ data class PDRoute(
 object PDSolver {
     private val NEIGHBOURS = listOf(-1 to 0, 1 to 0, 0 to -1, 0 to 1)
 
+    /** Independent SA runs per board; the best result is kept. */
+    private const val MULTI_RUNS = 4
+
     fun solve(
         board: PDBoard,
         maxLen: Int = 24,
-        budgetPerRestart: Int = 1400,
-        restarts: Int = 7,
+        budgetPerRestart: Int = 2500,
+        restarts: Int = 10,
         seed: ULong = 0x123456789ABCDEF0uL,
     ): PDRoute {
-        val rng = SplitMix64(seed)
+        var bestPath: List<Int> = emptyList()
+        var bestScore = Double.NEGATIVE_INFINITY
+        var bestCombos = 0
 
+        // Several independent SA runs from different seeds; keep whichever
+        // scores highest (combo count dominates, shorter path breaks ties).
+        for (k in 0 until MULTI_RUNS) {
+            val rng = SplitMix64(seed + k.toULong())
+            val (score, path, combos) = saOnce(board, rng, maxLen, budgetPerRestart, restarts)
+            if (score > bestScore || (score == bestScore && path.size < bestPath.size)) {
+                bestScore = score
+                bestPath = path
+                bestCombos = combos
+            }
+        }
+        return PDRoute(bestPath, bestCombos)
+    }
+
+    private fun saOnce(
+        board: PDBoard,
+        rng: SplitMix64,
+        maxLen: Int,
+        budget: Int,
+        restarts: Int,
+    ): Triple<Double, List<Int>, Int> {
         var bestPath: List<Int> = emptyList()
         var bestScore = Double.NEGATIVE_INFINITY
         var bestCombos = 0
@@ -64,7 +90,7 @@ object PDSolver {
             var currentScore = bestScore
             var temperature = 2.5
 
-            repeat(budgetPerRestart) {
+            repeat(budget) {
                 var candidate = currentPath
 
                 if (rng.nextUnit() < 0.6) {
@@ -112,7 +138,7 @@ object PDSolver {
             }
         }
 
-        return PDRoute(bestPath, bestCombos)
+        return Triple(bestScore, bestPath, bestCombos)
     }
 
     fun evaluate(board: PDBoard, path: List<Int>): Pair<Double, Int> {

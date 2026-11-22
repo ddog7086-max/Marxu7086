@@ -62,6 +62,8 @@ class PadService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val solverExecutor = Executors.newSingleThreadExecutor()
     private var lastCells: IntArray? = null
+    private var lockedCells: IntArray? = null
+    private var lockedRoute: PDRoute? = null
     private var lastAnalysis = 0L
 
     private val analyzeTask = object : Runnable {
@@ -155,12 +157,22 @@ class PadService : Service() {
         bitmap.recycle()
         if (board == null) return
 
-        if (board.cells.contentEquals(lastCells)) return
-        lastCells = board.cells.copyOf()
+        // Lock onto the first board and keep showing its best combo route. Only
+        // re-solve when the board actually changes; a couple of misread cells
+        // (recognition noise) must not flip the route every tick.
+        val current = board.cells
+        val locked = lockedCells
+        if (locked != null && lockedRoute != null) {
+            var diff = 0
+            for (i in current.indices) if (current[i] != locked[i]) diff++
+            if (diff <= STABLE_CELL_TOLERANCE) return
+        }
 
         solverExecutor.execute {
             val route = PDSolver.solve(board)
             mainHandler.post {
+                lockedCells = current.copyOf()
+                lockedRoute = route
                 overlay?.show(board, route)
                 listener?.onBoard(board, route)
             }
@@ -259,6 +271,8 @@ class PadService : Service() {
 
     private fun teardown() {
         mainHandler.removeCallbacks(analyzeTask)
+        lockedCells = null
+        lockedRoute = null
         solverExecutor.shutdown()
         overlay?.let { runCatching { windowManager.removeView(it) } }
         overlay = null
@@ -287,6 +301,9 @@ class PadService : Service() {
         const val EXTRA_DATA = "data"
         private const val NOTIF_ID = 42
         private const val ANALYZE_INTERVAL_MS = 900L
+
+        /** Cells allowed to differ before we treat the board as changed. */
+        private const val STABLE_CELL_TOLERANCE = 2
         private const val FOREGROUND_TYPE =
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
 
