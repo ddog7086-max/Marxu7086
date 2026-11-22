@@ -10,11 +10,12 @@ import android.view.View
 import com.example.padcombo.core.Orb
 import com.example.padcombo.core.PDBoard
 import com.example.padcombo.core.PDRoute
-import com.example.padcombo.core.PDSolver
 
 /**
- * Draws the recognized 6x5 board plus the solved white route. Reused both in
- * the main preview and on the floating overlay. Mirrors RoutePipView.swift.
+ * Floating route layer. On the overlay it is transparent and draws ONLY the white
+ * route (line + start circle + end square + mid-point arrows) directly over the
+ * real orbs — no re-drawn orb grid, no opaque panel, matching the reference PC
+ * design. On the main-screen preview it can optionally re-draw the orb board.
  */
 class RouteBoardView : View {
     constructor(context: Context) : super(context)
@@ -22,6 +23,9 @@ class RouteBoardView : View {
 
     private var board: PDBoard? = null
     private var route: PDRoute = PDRoute()
+
+    /** When true (main preview) also paint the recognized orbs; overlay keeps false. */
+    var showOrbs = false
 
     private val orbPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -34,9 +38,14 @@ class RouteBoardView : View {
         strokeWidth = 4f
         style = Paint.Style.STROKE
     }
+    private val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(60, 255, 255, 255)
+        strokeWidth = 2f
+        style = Paint.Style.STROKE
+    }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        textSize = 34f
+        textSize = 30f
         isFakeBoldText = true
     }
 
@@ -48,25 +57,30 @@ class RouteBoardView : View {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val header = 42f
         val cellW = width.toFloat() / PDBoard.COLS
-        val cellH = (height - header) / PDBoard.ROWS
+        val cellH = height.toFloat() / PDBoard.ROWS
         val orb = minOf(cellW, cellH) * 0.82f
 
-        val b = board ?: return
-        for (index in 0 until PDBoard.CELL_COUNT) {
-            val cx = (PDBoard.colOf(index) + 0.5f) * cellW
-            val cy = header + (PDBoard.rowOf(index) + 0.5f) * cellH
-            orbPaint.color = orbColor(b.cells[index])
-            canvas.drawCircle(cx, cy, orb / 2f, orbPaint)
+        val b = board
+        if (showOrbs && b != null) {
+            for (index in 0 until PDBoard.CELL_COUNT) {
+                val cx = (PDBoard.colOf(index) + 0.5f) * cellW
+                val cy = (PDBoard.rowOf(index) + 0.5f) * cellH
+                orbPaint.color = orbColor(b.cells[index])
+                canvas.drawCircle(cx, cy, orb / 2f, orbPaint)
+            }
+        } else if (!showOrbs) {
+            // Faint hairline frame so the user can see the capture box while aligning.
+            canvas.drawRect(1f, 1f, width - 1f, height - 1f, framePaint)
         }
 
-        // Route polyline with mid-point direction arrows; start = circle, end = square.
+        // Route polyline with mid-point direction arrows; start = hollow circle,
+        // end = square. Coordinates map straight onto the 6x5 grid filling this view.
         val path = route.path
         if (path.size >= 2) {
             fun center(i: Int): FloatArray {
                 val cx = (PDBoard.colOf(i) + 0.5f) * cellW
-                val cy = header + (PDBoard.rowOf(i) + 0.5f) * cellH
+                val cy = (PDBoard.rowOf(i) + 0.5f) * cellH
                 return floatArrayOf(cx, cy)
             }
             val arrowHead = Path()
@@ -102,9 +116,9 @@ class RouteBoardView : View {
             val end = center(path.last())
             val hs = orb * 0.30f
             canvas.drawRect(end[0] - hs, end[1] - hs, end[0] + hs, end[1] + hs, startPaint)
-        }
 
-        canvas.drawText("${route.combos} combo · ${path.size} 格", 12f, 30f, textPaint)
+            canvas.drawText("${route.combos} combo · ${path.size} 格", 12f, 30f, textPaint)
+        }
     }
 
     companion object {

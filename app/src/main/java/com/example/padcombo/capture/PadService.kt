@@ -26,6 +26,7 @@ import android.widget.FrameLayout
 import androidx.core.app.NotificationCompat
 import android.app.Service
 import com.example.padcombo.R
+import com.example.padcombo.core.Orb
 import com.example.padcombo.core.OrbRecognizer
 import com.example.padcombo.core.PDBoard
 import com.example.padcombo.core.PDBoardRect
@@ -173,6 +174,12 @@ class PadService : Service() {
         bitmap.recycle()
         if (board == null) return
 
+        // Guard: if the box does not cover the whole 6x5 board (too many empty
+        // cells because it sits on a boss / background), do not solve or update
+        // the route — keep the last valid one instead of drawing garbage.
+        val filled = board.cells.count { it != Orb.EMPTY }
+        if (filled < 24) return
+
         // Lock onto the first board and keep showing its best combo route. Only
         // re-solve when the board actually changes; a couple of misread cells
         // (recognition noise) must not flip the route every tick.
@@ -200,11 +207,15 @@ class PadService : Service() {
     private fun addOverlay() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val metrics = resources.displayMetrics
-        val width = (metrics.widthPixels * 0.72f).toInt()
-        val height = (width * 5f / 6f + 60f).toInt()
+        // Start the transparent box directly over the bottom orb board (FALLBACK),
+        // not up on the boss. User then drags/resizes it to frame the 6x5 grid.
+        val fb = PDBoardRect.FALLBACK
+        val width = (metrics.widthPixels * fb.width).toInt()
+        val height = (metrics.heightPixels * fb.height).toInt()
 
         val container = FrameLayout(this)
         val view = RouteBoardView(this)
+        view.showOrbs = false // overlay: draw route only, over the real orbs
         container.addView(
             view,
             FrameLayout.LayoutParams(
@@ -239,8 +250,8 @@ class PadService : Service() {
             PixelFormat.TRANSLUCENT,
         )
         params.gravity = Gravity.TOP or Gravity.START
-        params.x = (metrics.widthPixels - width) / 2
-        params.y = (metrics.heightPixels * 0.08f).toInt()
+        params.x = (metrics.widthPixels * fb.x).toInt()
+        params.y = (metrics.heightPixels * fb.y).toInt()
 
         container.setOnTouchListener(OverlayDrag(params, windowManager))
         windowManager.addView(container, params)

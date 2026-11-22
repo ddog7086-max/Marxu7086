@@ -41,6 +41,7 @@ class MainActivity : AppCompatActivity(), PadService.Listener {
 
         statusText = findViewById(R.id.statusText)
         preview = findViewById(R.id.preview)
+        preview.showOrbs = true // main preview re-draws the board; overlay draws route only
         toggleBtn = findViewById(R.id.toggleBtn)
 
         toggleBtn.setOnClickListener {
