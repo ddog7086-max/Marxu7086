@@ -67,6 +67,6 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
             android:lineSpacingExtra="4dp"
-            android:text="使用顺序：\n1. 打开 P&D，进到要转珠的那一回合。\n2. 点「开启助手」，允许屏幕录制授权。\n3. 悬浮窗浮在游戏上，每回合约 1 秒后更新路线，从白圈起点照着白线划。\n\n注意：识别靠颜色，不同主题/机型可能要微调参考色；天空掉落随机，路线只算你这一步能确定的 combo。这是外部辅助工具，P&D 用户条款不欢迎这类做法，账号风险自担。" />
+            android:text="使用顺序：\n1. 打开 P&amp;D，进到要转珠的那一回合。\n2. 点「开启助手」，允许屏幕录制授权。\n3. 悬浮窗浮在游戏上，每回合约 1 秒后更新路线，从白圈起点照着白线划。\n\n注意：识别靠颜色，不同主题/机型可能要微调参考色；天空掉落随机，路线只算你这一步能确定的 combo。这是外部辅助工具，P&amp;D 用户条款不欢迎这类做法，账号风险自担。" />
     </LinearLayout>
 </ScrollView>
