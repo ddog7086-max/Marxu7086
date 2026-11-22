@@ -19,6 +19,7 @@ class MainActivity : AppCompatActivity(), PadService.Listener {
     private lateinit var statusText: TextView
     private lateinit var preview: RouteBoardView
     private lateinit var toggleBtn: Button
+    private var versionName = ""
 
     private val projectionLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
@@ -43,6 +44,12 @@ class MainActivity : AppCompatActivity(), PadService.Listener {
         preview = findViewById(R.id.preview)
         preview.showOrbs = true // main preview re-draws the board; overlay draws route only
         toggleBtn = findViewById(R.id.toggleBtn)
+
+        versionName = try {
+            packageManager.getPackageInfo(packageName, 0).versionName ?: ""
+        } catch (e: Exception) {
+            ""
+        }
 
         toggleBtn.setOnClickListener {
             if (PadService.instance != null) {
@@ -70,11 +77,12 @@ class MainActivity : AppCompatActivity(), PadService.Listener {
     }
 
     private fun setRunning(running: Boolean) {
+        val ver = if (versionName.isNotEmpty()) "v$versionName  " else ""
         toggleBtn.text = if (running) "停止助手" else "开启助手"
         statusText.text = if (running) {
-            "运行中：拖动悬浮框对准珠子，拉右下角缩放。"
+            "${ver}运行中：点「对准」拖框包住珠子，再退出即可拖珠。"
         } else {
-            "未开启。先授予悬浮窗权限，再点「开启助手」允许屏幕录制。"
+            "${ver}未开启。先授予悬浮窗权限，再点「开启助手」允许屏幕录制。"
         }
     }
 
