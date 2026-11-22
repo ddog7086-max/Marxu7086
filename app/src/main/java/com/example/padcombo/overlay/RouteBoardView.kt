@@ -41,6 +41,10 @@ class RouteBoardView : View {
         color = Color.WHITE
         style = Paint.Style.FILL
     }
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        style = Paint.Style.FILL
+    }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = 28f
@@ -98,13 +102,13 @@ class RouteBoardView : View {
             curve.lineTo(pts.last()[0], pts.last()[1])
             canvas.drawPath(curve, linePaint)
 
-            // Start: a small solid white dot.
+            // Start: a small solid white filled circle.
             val start = pts[0]
-            val dotR = cell * 0.10f
+            val dotR = cell * 0.09f
             canvas.drawCircle(start[0], start[1], dotR, dotPaint)
 
-            // End: a single arrowhead at the very last point (no mid arrows,
-            // no hollow rings anywhere).
+            // End: a single solid white filled triangular arrowhead at the very
+            // last point (no mid arrows, no hollow rings anywhere).
             val prev = pts[pts.size - 2]
             val end = pts.last()
             val dx = end[0] - prev[0]
@@ -115,13 +119,13 @@ class RouteBoardView : View {
                 val uy = dy / len
                 val px = -uy
                 val py = ux
-                val s = cell * 0.22f
+                val s = cell * 0.18f
                 val arrow = Path()
                 arrow.moveTo(end[0], end[1])
                 arrow.lineTo(end[0] - ux * s + px * s * 0.55f, end[1] - uy * s + py * s * 0.55f)
                 arrow.lineTo(end[0] - ux * s - px * s * 0.55f, end[1] - uy * s - py * s * 0.55f)
                 arrow.close()
-                canvas.drawPath(arrow, linePaint)
+                canvas.drawPath(arrow, fillPaint)
             }
 
             val td = resources.displayMetrics.density
