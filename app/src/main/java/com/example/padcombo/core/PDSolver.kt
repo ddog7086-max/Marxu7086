@@ -100,16 +100,20 @@ object PDSolver {
                     val room = maxLen - head.size
                     if (room >= 1) {
                         val extra = rng.nextInt(1, room + 1)
-                        val tail = randomPathFrom(head[head.size - 1], extra, maxLen, rng)
+                        val tail = randomPathFrom(
+                            head[head.size - 1], extra, maxLen, rng, head.toSet(),
+                        )
                         candidate = head + tail.drop(1)
                     } else {
                         return@repeat
                     }
                 } else {
-                    // Wiggle a single step.
+                    // Wiggle a single step: pick a neighbour not already on the
+                    // path so no cell is visited twice (no overlapping line).
                     if (candidate.size < 2) return@repeat
                     val i = rng.nextInt(1, candidate.size)
-                    val options = neighbourIndicesOf(candidate[i - 1])
+                    val used = candidate.toSet()
+                    val options = neighbourIndicesOf(candidate[i - 1]).filter { it !in used }
                     if (options.isEmpty()) return@repeat
                     candidate = candidate.toMutableList().also {
                         it[i] = options[rng.nextInt(options.size)]
@@ -149,9 +153,15 @@ object PDSolver {
         return Pair(combos * 10.0 - 0.35 * path.size, combos)
     }
 
-    private fun randomPathFrom(start: Int, length: Int, maxLen: Int, rng: SplitMix64): List<Int> {
+    private fun randomPathFrom(
+        start: Int,
+        length: Int,
+        maxLen: Int,
+        rng: SplitMix64,
+        excluded: Set<Int> = emptySet(),
+    ): List<Int> {
         val path = mutableListOf(start)
-        val visited = HashSet<Int>()
+        val visited = HashSet(excluded)
         visited.add(start)
         var previous = -1
         var last = start
