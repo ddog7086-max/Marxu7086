@@ -34,7 +34,7 @@ class RouteBoardView : View {
     private val orbPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(245, 255, 255, 255)
-        strokeWidth = 5f
+        strokeWidth = 8f
         strokeCap = Paint.Cap.ROUND
         style = Paint.Style.STROKE
     }

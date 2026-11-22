@@ -238,6 +238,16 @@ class PadService : Service() {
             150, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
         col.addView(analyzeBtn, btnW)
 
+        // Close button: tears down the whole assistant (removes every overlay,
+        // stops the foreground service).
+        val closeBtn = Button(this).apply {
+            text = "关闭"
+            textSize = 14f
+            setPadding(28, 8, 28, 8)
+            setOnClickListener { teardown() }
+        }
+        col.addView(closeBtn, btnW)
+
         // Opacity slider: 80 (light) .. 255 (solid). Persisted and applied live.
         val sp = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val alphaBar = android.widget.SeekBar(this).apply {
