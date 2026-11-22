@@ -33,13 +33,13 @@ object PDSolver {
     private val NEIGHBOURS = listOf(-1 to 0, 1 to 0, 0 to -1, 0 to 1)
 
     /** Independent SA runs per board; the best result is kept. */
-    private const val MULTI_RUNS = 8
+    private const val MULTI_RUNS = 4
 
     fun solve(
         board: PDBoard,
         maxLen: Int = 30,
-        budgetPerRestart: Int = 6000,
-        restarts: Int = 24,
+        budgetPerRestart: Int = 2200,
+        restarts: Int = 12,
         seed: ULong = 0x123456789ABCDEF0uL,
     ): PDRoute {
         var bestPath: List<Int> = emptyList()

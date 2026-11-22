@@ -62,6 +62,7 @@ class PadService : Service() {
     private var controlBar: FrameLayout? = null
     private var colorKey: ColorKeyView? = null
     private var colorKeyBar: FrameLayout? = null
+    private var analyzeBtn: android.widget.Button? = null
 
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
@@ -140,9 +141,12 @@ class PadService : Service() {
      * route once. No continuous polling, no lock loop. The fixed FALLBACK box
      * covers the whole bottom board so no manual alignment is needed.
      */
+    private fun restoreAnalyzeBtn() { analyzeBtn?.text = "分析" }
+
     private fun analyze() {
-        val reader = imageReader ?: return
-        val image = reader.acquireLatestImage() ?: return
+        analyzeBtn?.text = "分析中…"
+        val reader = imageReader ?: run { restoreAnalyzeBtn(); return }
+        val image = reader.acquireLatestImage() ?: run { restoreAnalyzeBtn(); return }
 
         val bitmap = try {
             val plane = image.planes[0]
@@ -166,7 +170,7 @@ class PadService : Service() {
             null
         } finally {
             image.close()
-        } ?: return
+        } ?: run { restoreAnalyzeBtn(); return }
 
         // Always use the locked 6x5 grid measured from a real screenshot;
         // no manual calibration. Recognition only reads inside this board.
@@ -175,11 +179,11 @@ class PadService : Service() {
 
         val board = OrbRecognizer.classify(bitmap, rect)
         bitmap.recycle()
-        if (board == null) return
+        if (board == null) { restoreAnalyzeBtn(); return }
 
         // Guard: not enough recognised orbs means the frame does not show a full board.
         val filled = board.cells.count { it != Orb.EMPTY }
-        if (filled < 24) return
+        if (filled < 24) { restoreAnalyzeBtn(); return }
 
         colorKey?.setBoard(board)
 
@@ -191,6 +195,7 @@ class PadService : Service() {
             mainHandler.post {
                 overlay?.show(board, route)
                 listener?.onBoard(board, route)
+                restoreAnalyzeBtn()
             }
         }
     }
@@ -231,15 +236,20 @@ class PadService : Service() {
         val col = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
         }
+        val kd = resources.displayMetrics.density
+        val panelW = (210 * kd).toInt()
+        val matchW = android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+        )
         val analyzeBtn = Button(this).apply {
             text = "分析"
             textSize = 14f
             setPadding(28, 8, 28,  8)
             setOnClickListener { analyze() }
         }
-        val btnW = android.widget.LinearLayout.LayoutParams(
-            150, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
-        col.addView(analyzeBtn, btnW)
+        this@PadService.analyzeBtn = analyzeBtn
+        col.addView(analyzeBtn, matchW)
 
         // Close button: tears down the whole assistant (removes every overlay,
         // stops the foreground service).
@@ -249,10 +259,20 @@ class PadService : Service() {
             setPadding(28, 8, 28, 8)
             setOnClickListener { teardown() }
         }
-        col.addView(closeBtn, btnW)
+        col.addView(closeBtn, matchW)
+
+        val sp = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+        fun label(text: String): android.widget.TextView = android.widget.TextView(this).apply {
+            this.text = text
+            textSize = 11f
+            setTextColor(android.graphics.Color.WHITE)
+            setBackgroundColor(0xAA000000.toInt())
+            setPadding(8, 4, 8, 4)
+        }
 
         // Opacity slider: 80 (light) .. 255 (solid). Persisted and applied live.
-        val sp = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        col.addView(label("透明度"), matchW)
         val alphaBar = android.widget.SeekBar(this).apply {
             max = 175
             progress = sp.getInt(KEY_ALPHA, 245) - 80
@@ -267,12 +287,11 @@ class PadService : Service() {
                 override fun onStopTrackingTouch(s: android.widget.SeekBar?) {}
             })
         }
-        col.addView(alphaBar, android.widget.LinearLayout.LayoutParams(
-            220, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
-        ))
+        col.addView(alphaBar, matchW)
 
         // Complexity slider: 0..20 maps to a route length cap of 10..30 cells.
         // Higher = longer, more elaborate route that chains more combos.
+        col.addView(label("复杂度（往右路线更长）"), matchW)
         val complexBar = android.widget.SeekBar(this).apply {
             max = 20
             progress = sp.getInt(KEY_COMPLEX, 8)
@@ -284,11 +303,9 @@ class PadService : Service() {
                 override fun onStopTrackingTouch(s: android.widget.SeekBar?) {}
             })
         }
-        col.addView(complexBar, android.widget.LinearLayout.LayoutParams(
-            220, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
-        ))
+        col.addView(complexBar, matchW)
         bar.addView(col, FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
+            panelW,
             FrameLayout.LayoutParams.WRAP_CONTENT,
         ))
         val barParams = WindowManager.LayoutParams(
