@@ -82,7 +82,12 @@ object OrbRecognizer {
                     cells[PDBoard.index(row, col)] = Orb.EMPTY
                     continue
                 }
-                cells[PDBoard.index(row, col)] = hueClass(h)
+                // Pink heart override: the heart square's hue can drift toward red
+                // under highlight/border noise and be misread as fire, but its RGB
+                // always has blue clearly above green (pink), whereas fire/orange
+                // has green above blue. This rescues hearts before hue matching.
+                cells[PDBoard.index(row, col)] =
+                    if (r > 0.45 && b > g + 0.12) Orb.HEART else hueClass(h)
             }
         }
         return PDBoard(cells)
