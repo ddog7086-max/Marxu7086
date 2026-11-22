@@ -33,13 +33,13 @@ object PDSolver {
     private val NEIGHBOURS = listOf(-1 to 0, 1 to 0, 0 to -1, 0 to 1)
 
     /** Independent SA runs per board; the best result is kept. */
-    private const val MULTI_RUNS = 4
+    private const val MULTI_RUNS = 8
 
     fun solve(
         board: PDBoard,
-        maxLen: Int = 24,
-        budgetPerRestart: Int = 2500,
-        restarts: Int = 10,
+        maxLen: Int = 30,
+        budgetPerRestart: Int = 6000,
+        restarts: Int = 24,
         seed: ULong = 0x123456789ABCDEF0uL,
     ): PDRoute {
         var bestPath: List<Int> = emptyList()
@@ -47,11 +47,12 @@ object PDSolver {
         var bestCombos = 0
 
         // Several independent SA runs from different seeds; keep whichever
-        // scores highest (combo count dominates, shorter path breaks ties).
+        // scores highest (combo count dominates; on a tie prefer the longer,
+        // more elaborate path).
         for (k in 0 until MULTI_RUNS) {
             val rng = SplitMix64(seed + k.toULong())
             val (score, path, combos) = saOnce(board, rng, maxLen, budgetPerRestart, restarts)
-            if (score > bestScore || (score == bestScore && path.size < bestPath.size)) {
+            if (score > bestScore || (score == bestScore && path.size > bestPath.size)) {
                 bestScore = score
                 bestPath = path
                 bestCombos = combos
@@ -71,11 +72,10 @@ object PDSolver {
         var bestScore = Double.NEGATIVE_INFINITY
         var bestCombos = 0
 
-        // Seed from a handful of random drags, including short ones: short paths
-        // often score better because of the length penalty.
-        repeat(12) {
+        // Seed from many random drags of varied length to give SA diverse starts.
+        repeat(24) {
             val start = rng.nextInt(PDBoard.CELL_COUNT)
-            val length = rng.nextInt(8, maxLen + 1)
+            val length = rng.nextInt(4, maxLen + 1)
             val candidate = randomPathFrom(start, length, maxLen, rng)
             val (score, combos) = evaluate(board, candidate)
             if (score > bestScore) {
@@ -148,9 +148,9 @@ object PDSolver {
     fun evaluate(board: PDBoard, path: List<Int>): Pair<Double, Int> {
         val after = board.dragged(along = path)
         val combos = after.resolveCombos()
-        // Combo count dominates; path length is only a tie-breaker, because every
-        // extra cell costs the player time inside the 4-5 second window.
-        return Pair(combos * 10.0 - 0.35 * path.size, combos)
+        // Combo count dominates; a mild length penalty only breaks ties, so longer,
+        // more elaborate paths that chain more clears are preferred.
+        return Pair(combos * 10.0 - 0.12 * path.size, combos)
     }
 
     private fun randomPathFrom(
