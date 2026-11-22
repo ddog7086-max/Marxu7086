@@ -33,6 +33,7 @@ import com.example.padcombo.core.PDBoardRect
 import com.example.padcombo.core.PDRoute
 import com.example.padcombo.core.PDSolver
 import com.example.padcombo.overlay.RouteBoardView
+import com.example.padcombo.overlay.CalibrationFrameView
 import com.example.padcombo.overlay.ColorKeyView
 import java.util.concurrent.Executors
 import kotlin.math.min
@@ -62,6 +63,7 @@ class PadService : Service() {
     private var controlBar: FrameLayout? = null
     private var colorKey: ColorKeyView? = null
     private var colorKeyBar: FrameLayout? = null
+    private var calibrationFrame: CalibrationFrameView? = null
     private var alignMode = false
 
     private var projection: MediaProjection? = null
@@ -169,10 +171,17 @@ class PadService : Service() {
             image.close()
         } ?: return
 
-        val board = OrbRecognizer.classify(
-            bitmap,
-            PDBoardRect.fit(bitmap.width.toDouble(), bitmap.height.toDouble()),
-        )
+        // Use the saved calibration box if the user has aligned it; otherwise
+        // fall back to an auto-fit square 6x5 grid.
+        val sp = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val rect = if (sp.getBoolean("calibrated", false)) {
+            loadRect()
+        } else {
+            PDBoardRect.fit(bitmap.width.toDouble(), bitmap.height.toDouble())
+        }
+        overlay?.boardRect = rect
+
+        val board = OrbRecognizer.classify(bitmap, rect)
         bitmap.recycle()
         if (board == null) return
 
@@ -209,6 +218,22 @@ class PadService : Service() {
             ),
         )
 
+        // Draggable/resizable calibration frame; hidden until 对准 is tapped.
+        val frame = CalibrationFrameView(this)
+        frame.visibility = View.GONE
+        frame.onChanged = { r ->
+            saveRect(r)
+            overlay?.boardRect = r
+        }
+        routeRoot.addView(
+            frame,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        calibrationFrame = frame
+
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -220,16 +245,27 @@ class PadService : Service() {
         )
         windowManager.addView(routeRoot, params)
 
-        // --- Small control window (touchable), top-right: tap 分析 to grab one
-        // frame, recognise it and draw the route once (static frame mode).
+        // --- Small control window (touchable), top-right: 对准 aligns the box,
+        // 分析 grabs one frame, recognises it and draws the route once.
         val bar = FrameLayout(this)
+        val row = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+        }
+        val alignBtn = Button(this).apply {
+            text = "对准"
+            textSize = 14f
+            setPadding(24, 8, 24, 8)
+            setOnClickListener { toggleAlign() }
+        }
         val analyzeBtn = Button(this).apply {
             text = "分析"
             textSize = 14f
             setPadding(28, 8, 28, 8)
             setOnClickListener { analyze() }
         }
-        bar.addView(analyzeBtn, FrameLayout.LayoutParams(
+        row.addView(alignBtn)
+        row.addView(analyzeBtn)
+        bar.addView(row, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT,
         ))
@@ -278,72 +314,40 @@ class PadService : Service() {
         alignMode = false
     }
 
-    /** Toggle align mode: on = route layer draggable/resizable; off = touch-through. */
+    /** Toggle align mode: show the draggable/resizable frame to align the box. */
     private fun toggleAlign() {
         alignMode = !alignMode
         val params = overlayParams ?: return
         val root = rootView ?: return
+        val frame = calibrationFrame ?: return
         if (alignMode) {
+            val sp = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            frame.rect = if (sp.getBoolean("calibrated", false)) {
+                loadRect()
+            } else {
+                PDBoardRect.fit(
+                    resources.displayMetrics.widthPixels.toDouble(),
+                    resources.displayMetrics.heightPixels.toDouble(),
+                )
+            }
+            frame.visibility = View.VISIBLE
             params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-            root.setOnTouchListener(OverlayDrag(params, windowManager))
         } else {
+            frame.visibility = View.GONE
             params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-            root.setOnTouchListener(null)
         }
-        overlay?.invalidate()
         windowManager.updateViewLayout(root, params)
     }
 
-    private class OverlayDrag(
-        private val params: WindowManager.LayoutParams,
-        private val wm: WindowManager,
-    ) : View.OnTouchListener {
-        private var startX = 0f
-        private var startY = 0f
-        private var startParamX = 0
-        private var startParamY = 0
-        private var startW = 0
-        private var startH = 0
-        private var mode = 0 // 0 = move, 1 = resize (bottom-right handle)
-        private val handle = 56
-
-        override fun onTouch(v: View, event: MotionEvent): Boolean {
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    if (event.x > v.width - handle && event.y > v.height - handle) {
-                        mode = 1
-                        startW = params.width
-                        startH = params.height
-                    } else {
-                        mode = 0
-                        startParamX = params.x
-                        startParamY = params.y
-                    }
-                    startX = event.rawX
-                    startY = event.rawY
-                    return true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    if (mode == 1) {
-                        // Lock the 6:5 (cols:rows) aspect so the grid never stretches
-                        // out of shape; width drives height = width * 5/6.
-                        val newW = (startW + (event.rawX - startX)).toInt().coerceAtLeast(200)
-                        params.width = newW
-                        params.height = (newW * 5f / 6f).toInt()
-                    } else {
-                        params.x = startParamX + (event.rawX - startX).toInt()
-                        params.y = startParamY + (event.rawY - startY).toInt()
-                    }
-                    wm.updateViewLayout(v, params)
-                    return true
-                }
-                MotionEvent.ACTION_UP -> {
-                    mode = 0
-                    return true
-                }
-            }
-            return false
-        }
+    /** Persist the aligned normalised board box so every analysis reuses it. */
+    private fun saveRect(r: PDBoardRect) {
+        getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putFloat(KEY_X, r.x.toFloat())
+            .putFloat(KEY_Y, r.y.toFloat())
+            .putFloat(KEY_W, r.width.toFloat())
+            .putFloat(KEY_H, r.height.toFloat())
+            .putBoolean("calibrated", true)
+            .apply()
     }
 
     // ------------------------------------------------------------- rect
@@ -394,6 +398,7 @@ class PadService : Service() {
         colorKeyBar = null
         colorKey = null
         overlay = null
+        calibrationFrame = null
         alignMode = false
     }
 

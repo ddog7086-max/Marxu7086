@@ -28,21 +28,18 @@ class RouteBoardView : View {
     /** Main preview re-draws the board; overlay keeps false. */
     var showOrbs = false
 
+    /** Calibrated board rect supplied by the service (normalised 0..1). */
+    var boardRect: PDBoardRect? = null
+
     private val orbPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(240, 255, 255, 255)
-        strokeWidth = 4f
+        color = Color.argb(245, 255, 255, 255)
+        strokeWidth = 2.5f
         style = Paint.Style.STROKE
     }
-    private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(235, 255, 255, 255)
-        strokeWidth = 3f
-        style = Paint.Style.STROKE
-    }
-    private val startPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        strokeWidth = 3f
-        style = Paint.Style.STROKE
+        style = Paint.Style.FILL
     }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
@@ -60,25 +57,14 @@ class RouteBoardView : View {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // In the main preview the view itself IS the board; on the overlay the
-        // grid auto-fits a square 6x5 grid onto the lower screen on any device.
-        val fb: PDBoardRect
-        val ox: Float
-        val oy: Float
-        val cellW: Float
-        val cellH: Float
-        if (showOrbs) {
-            fb = PDBoardRect.FALLBACK
-            ox = 0f; oy = 0f
-            cellW = width.toFloat() / PDBoard.COLS
-            cellH = height.toFloat() / PDBoard.ROWS
-        } else {
-            fb = PDBoardRect.fit(width.toDouble(), height.toDouble())
-            ox = (fb.x * width).toFloat()
-            oy = (fb.y * height).toFloat()
-            cellW = (fb.width * width / PDBoard.COLS).toFloat()
-            cellH = (fb.height * height / PDBoard.ROWS).toFloat()
-        }
+        // Main preview fills itself; the overlay uses the calibrated rect,
+        // falling back to an auto-fit square grid if none was saved.
+        val fb = if (showOrbs) PDBoardRect.FALLBACK
+            else (boardRect ?: PDBoardRect.fit(width.toDouble(), height.toDouble()))
+        val ox = (fb.x * width).toFloat()
+        val oy = (fb.y * height).toFloat()
+        val cellW = (fb.width * width / PDBoard.COLS).toFloat()
+        val cellH = (fb.height * height / PDBoard.ROWS).toFloat()
         val orb = minOf(cellW, cellH) * 0.82f
 
         val b = board
@@ -99,12 +85,9 @@ class RouteBoardView : View {
                 return floatArrayOf(cx, cy)
             }
             val pts = path.map { center(it) }
+            val cell = minOf(cellW, cellH)
 
-            // Hollow white circle on every visited cell (classic style).
-            val ringR = minOf(cellW, cellH) * 0.42f
-            for (p in pts) canvas.drawCircle(p[0], p[1], ringR, ringPaint)
-
-            // Smoothed rounded curve through the nodes.
+            // Thin smooth solid white line through the path nodes.
             val curve = Path()
             curve.moveTo(pts[0][0], pts[0][1])
             for (i in 1 until pts.size - 1) {
@@ -115,42 +98,37 @@ class RouteBoardView : View {
             curve.lineTo(pts.last()[0], pts.last()[1])
             canvas.drawPath(curve, linePaint)
 
-            // Mid-point direction arrows along each segment.
-            val arrowHead = Path()
-            for (k in 1 until pts.size) {
-                val a = pts[k - 1]
-                val c = pts[k]
-                val mx = (a[0] + c[0]) / 2
-                val my = (a[1] + c[1]) / 2
-                val dx = c[0] - a[0]
-                val dy = c[1] - a[1]
-                val len = Math.hypot(dx.toDouble(), dy.toDouble()).toFloat()
-                if (len > 1f) {
-                    val ux = dx / len
-                    val uy = dy / len
-                    val px = -uy
-                    val py = ux
-                    val s = orb * 0.16f
-                    arrowHead.reset()
-                    arrowHead.moveTo(mx + ux * s * 1.6f, my + uy * s * 1.6f)
-                    arrowHead.lineTo(mx - ux * s + px * s, my - uy * s + py * s)
-                    arrowHead.lineTo(mx - ux * s - px * s, my - uy * s - py * s)
-                    arrowHead.close()
-                    canvas.drawPath(arrowHead, linePaint)
-                }
-            }
-            // Start: hollow circle (slightly larger).
+            // Start: a small solid white dot.
             val start = pts[0]
-            canvas.drawCircle(start[0], start[1], ringR * 1.15f, startPaint)
-            // End: small square marker.
-            val end = pts.last()
-            val hs = orb * 0.26f
-            canvas.drawRect(end[0] - hs, end[1] - hs, end[0] + hs, end[1] + hs, startPaint)
+            val dotR = cell * 0.10f
+            canvas.drawCircle(start[0], start[1], dotR, dotPaint)
 
+            // End: a single arrowhead at the very last point (no mid arrows,
+            // no hollow rings anywhere).
+            val prev = pts[pts.size - 2]
+            val end = pts.last()
+            val dx = end[0] - prev[0]
+            val dy = end[1] - prev[1]
+            val len = Math.hypot(dx.toDouble(), dy.toDouble()).toFloat()
+            if (len > 1f) {
+                val ux = dx / len
+                val uy = dy / len
+                val px = -uy
+                val py = ux
+                val s = cell * 0.22f
+                val arrow = Path()
+                arrow.moveTo(end[0], end[1])
+                arrow.lineTo(end[0] - ux * s + px * s * 0.55f, end[1] - uy * s + py * s * 0.55f)
+                arrow.lineTo(end[0] - ux * s - px * s * 0.55f, end[1] - uy * s - py * s * 0.55f)
+                arrow.close()
+                canvas.drawPath(arrow, linePaint)
+            }
+
+            val td = resources.displayMetrics.density
             canvas.drawText(
                 "${route.combos} combo · ${path.size} 格",
-                ox + (fb.width * width / 2).toFloat(),
-                (oy - 10f).coerceAtLeast(24f),
+                16f * td,
+                86f * td,
                 textPaint,
             )
         }
