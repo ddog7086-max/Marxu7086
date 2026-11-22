@@ -42,24 +42,40 @@ object OrbRecognizer {
                 val py = (fy * height).toInt()
                 if (px < 2 || px >= width - 2 || py < 2 || py >= height - 2) continue
 
-                // Average a small 3x3 window around the cell centre to resist
-                // a single noisy pixel / outline anti-aliasing.
+                // The orb base colour sits on the circle edge while the character
+                // face sits in the centre, so averaging centre pixels reads skin
+                // tone. Keep only the most saturated pixels in the window to read
+                // the true orb colour and ignore the face/background.
+                val cellW = rect.width * width / PDBoard.COLS
+                val cellH = rect.height * height / PDBoard.ROWS
+                val half = maxOf(3, (minOf(cellW, cellH) / 6).toInt())
+
+                val sampled = ArrayList<Pair<Double, Int>>()
+                for (dy in -half..half) {
+                    for (dx in -half..half) {
+                        val x = px + dx
+                        val y = py + dy
+                        if (x in 0 until width && y in 0 until height) {
+                            val pixel = pixels[y * width + x]
+                            sampled.add(saturationOf(pixel) to pixel)
+                        }
+                    }
+                }
+                sampled.sortByDescending { it.first }
+                val topN = maxOf(8, sampled.size / 6)
+
                 var r = 0.0
                 var g = 0.0
                 var b = 0.0
-                var n = 0
-                for (dy in -1..1) {
-                    for (dx in -1..1) {
-                        val pixel = pixels[(py + dy) * width + (px + dx)]
-                        r += (pixel shr 16 and 0xFF)
-                        g += (pixel shr 8 and 0xFF)
-                        b += (pixel and 0xFF)
-                        n++
-                    }
+                for (i in 0 until topN) {
+                    val p = sampled[i].second
+                    r += (p shr 16 and 0xFF)
+                    g += (p shr 8 and 0xFF)
+                    b += (p and 0xFF)
                 }
-                r /= n * 255.0
-                g /= n * 255.0
-                b /= n * 255.0
+                r /= topN * 255.0
+                g /= topN * 255.0
+                b /= topN * 255.0
 
                 val (h, s, v) = rgbToHsv(r, g, b)
                 // Desaturated (grey/white) or too dark = no orb here.
@@ -98,6 +114,16 @@ object OrbRecognizer {
     private fun hueDistance(a: Double, b: Double): Double {
         val d = abs(a - b) % 360.0
         return min(d, 360.0 - d)
+    }
+
+    /** Saturation of a packed ARGB pixel, used to rank orb-base pixels over face. */
+    private fun saturationOf(pixel: Int): Double {
+        val r = (pixel shr 16 and 0xFF) / 255.0
+        val g = (pixel shr 8 and 0xFF) / 255.0
+        val b = (pixel and 0xFF) / 255.0
+        val mx = max(r, max(g, b))
+        val mn = min(r, min(g, b))
+        return if (mx == 0.0) 0.0 else (mx - mn) / mx
     }
 
     private fun rgbToHsv(r: Double, g: Double, b: Double): Triple<Double, Double, Double> {

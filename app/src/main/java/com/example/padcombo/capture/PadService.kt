@@ -332,7 +332,7 @@ class PadService : Service() {
         private const val ANALYZE_INTERVAL_MS = 900L
 
         /** Cells allowed to differ before we treat the board as changed. */
-        private const val STABLE_CELL_TOLERANCE = 2
+        private const val STABLE_CELL_TOLERANCE = 3
         private const val FOREGROUND_TYPE =
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
 
