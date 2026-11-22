@@ -62,7 +62,7 @@ class PadService : Service() {
     private var imageReader: ImageReader? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val solverExecutor = Executors.newSingleThreadExecutor()
+    private var solverExecutor = Executors.newSingleThreadExecutor()
     private var lastCells: IntArray? = null
     private var lockedCells: IntArray? = null
     private var lockedRoute: PDRoute? = null
@@ -83,6 +83,10 @@ class PadService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Drop any leftover overlay/state from a previous run so restarting does
+        // not stack a second board on top of the old still-visible one.
+        resetBeforeStart()
+
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
         val data = intent?.getParcelableExtra<Intent>(EXTRA_DATA)
 
@@ -154,7 +158,17 @@ class PadService : Service() {
             image.close()
         } ?: return
 
-        val rect = loadRect()
+        // The floating window itself IS the capture box: move it to the orb board
+        // and drag its bottom-right corner to resize; its on-screen rect becomes
+        // the normalised region passed to the recognizer.
+        val pm = overlayParams ?: return
+        val metrics = resources.displayMetrics
+        val rect = PDBoardRect(
+            pm.x.toDouble() / metrics.widthPixels,
+            pm.y.toDouble() / metrics.heightPixels,
+            pm.width.toDouble() / metrics.widthPixels,
+            pm.height.toDouble() / metrics.heightPixels,
+        )
         val board = OrbRecognizer.classify(bitmap, rect)
         bitmap.recycle()
         if (board == null) return
@@ -242,27 +256,40 @@ class PadService : Service() {
         private var startY = 0f
         private var startParamX = 0
         private var startParamY = 0
-        private var dragging = false
+        private var startW = 0
+        private var startH = 0
+        private var mode = 0 // 0 = move, 1 = resize (bottom-right handle)
+        private val handle = 56
 
         override fun onTouch(v: View, event: MotionEvent): Boolean {
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    if (event.x > v.width - handle && event.y > v.height - handle) {
+                        mode = 1
+                        startW = params.width
+                        startH = params.height
+                    } else {
+                        mode = 0
+                        startParamX = params.x
+                        startParamY = params.y
+                    }
                     startX = event.rawX
                     startY = event.rawY
-                    startParamX = params.x
-                    startParamY = params.y
-                    dragging = true
                     return true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    if (!dragging) return false
-                    params.x = startParamX + (event.rawX - startX).toInt()
-                    params.y = startParamY + (event.rawY - startY).toInt()
+                    if (mode == 1) {
+                        params.width = (startW + (event.rawX - startX)).toInt().coerceAtLeast(160)
+                        params.height = (startH + (event.rawY - startY)).toInt().coerceAtLeast(160)
+                    } else {
+                        params.x = startParamX + (event.rawX - startX).toInt()
+                        params.y = startParamY + (event.rawY - startY).toInt()
+                    }
                     wm.updateViewLayout(v, params)
                     return true
                 }
                 MotionEvent.ACTION_UP -> {
-                    dragging = false
+                    mode = 0
                     return true
                 }
             }
@@ -298,11 +325,22 @@ class PadService : Service() {
             .build()
     }
 
+    /** Remove any previous overlay/state before a fresh start. */
+    private fun resetBeforeStart() {
+        mainHandler.removeCallbacks(analyzeTask)
+        lockedCells = null
+        lockedRoute = null
+        overlay?.let { runCatching { windowManager.removeView(it) } }
+        overlay = null
+        solverExecutor.shutdownNow()
+        solverExecutor = Executors.newSingleThreadExecutor()
+    }
+
     private fun teardown() {
         mainHandler.removeCallbacks(analyzeTask)
         lockedCells = null
         lockedRoute = null
-        solverExecutor.shutdown()
+        solverExecutor.shutdownNow()
         overlay?.let { runCatching { windowManager.removeView(it) } }
         overlay = null
         virtualDisplay?.release()

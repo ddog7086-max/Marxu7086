@@ -30,30 +30,9 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="盘面区域校准（把框对到 6x5 珠阵，无需精确到像素）"
+            android:text="开启后，直接拖动悬浮框对准 6x5 珠阵；拉右下角放大缩小。框住珠子即可，无需精确。"
             android:textStyle="bold"
             android:layout_marginBottom="6dp" />
-
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-            <TextView android:layout_width="32dp" android:layout_height="wrap_content" android:text="左" />
-            <SeekBar android:id="@+id/barX" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:max="1000" />
-            <TextView android:id="@+id/valX" android:layout_width="56dp" android:layout_height="wrap_content" android:text="0.070" />
-        </LinearLayout>
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-            <TextView android:layout_width="32dp" android:layout_height="wrap_content" android:text="上" />
-            <SeekBar android:id="@+id/barY" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:max="1000" />
-            <TextView android:id="@+id/valY" android:layout_width="56dp" android:layout_height="wrap_content" android:text="0.615" />
-        </LinearLayout>
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-            <TextView android:layout_width="32dp" android:layout_height="wrap_content" android:text="宽" />
-            <SeekBar android:id="@+id/barW" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:max="1000" />
-            <TextView android:id="@+id/valW" android:layout_width="56dp" android:layout_height="wrap_content" android:text="0.860" />
-        </LinearLayout>
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-            <TextView android:layout_width="32dp" android:layout_height="wrap_content" android:text="高" />
-            <SeekBar android:id="@+id/barH" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:max="1000" />
-            <TextView android:id="@+id/valH" android:layout_width="56dp" android:layout_height="wrap_content" android:text="0.235" />
-        </LinearLayout>
 
         <Button
             android:id="@+id/toggleBtn"
