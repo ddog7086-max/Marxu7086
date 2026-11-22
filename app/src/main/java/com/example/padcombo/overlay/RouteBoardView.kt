@@ -48,13 +48,6 @@ class RouteBoardView : View {
 
     /** Visibility of the whole route (line / start dot / end arrow), 0..255. */
     var routeAlpha: Int = 245
-        set(value) {
-            field = value.coerceIn(0, 255)
-            linePaint.alpha = field
-            dotPaint.alpha = field
-            fillPaint.alpha = field
-            invalidate()
-        }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = 28f
@@ -70,6 +63,10 @@ class RouteBoardView : View {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        val a = routeAlpha.coerceIn(0, 255)
+        linePaint.alpha = a
+        dotPaint.alpha = a
+        fillPaint.alpha = a
 
         // Main preview fills itself; the overlay uses the calibrated rect,
         // falling back to an auto-fit square grid if none was saved.
