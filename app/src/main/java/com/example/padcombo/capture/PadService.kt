@@ -243,6 +243,16 @@ class PadService : Service() {
             android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
             android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
         )
+        // Version tag so the user can confirm the installed build at a glance.
+        val ver = try {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        } catch (e: Exception) { "?" }
+        col.addView(android.widget.TextView(this).apply {
+            text = "PadCombo v$ver"
+            textSize = 10f
+            setTextColor(0xFFCCCCCC.toInt())
+            setPadding(8, 2, 8, 2)
+        }, matchW)
         val analyzeBtn = Button(this).apply {
             text = "分析"
             textSize = 14f
