@@ -20,9 +20,10 @@ android {
     // uninstalling. (A freshly generated CI debug keystore differs each run.)
     signingConfigs {
         debug {
-            storeFile file("debug.p12")
+            storeFile file("debug.keystore")
             storePassword "android"
-            storeType "PKCS12"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
         }
     }
 
