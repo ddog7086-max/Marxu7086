@@ -49,6 +49,33 @@ object OrbRecognizer {
                 val cellH = rect.height * height / PDBoard.ROWS
                 val half = maxOf(3, (minOf(cellW, cellH) / 6).toInt())
 
+                // Whole-cell pink vote: the heart square's centre sits on the white
+                // heart graphic, so a centre average drifts toward white/fire. Count
+                // pink pixels (high red, blue clearly above green) across the cell;
+                // a clear majority means heart regardless of the centre graphic.
+                val hw = (cellW * 0.35).toInt()
+                val hh = (cellH * 0.35).toInt()
+                var pink = 0
+                var total = 0
+                for (dy in -hh..hh) {
+                    for (dx in -hw..hw) {
+                        val x = px + dx
+                        val y = py + dy
+                        if (x in 0 until width && y in 0 until height) {
+                            val p = pixels[y * width + x]
+                            val pr = p shr 16 and 0xFF
+                            val pg = p shr 8 and 0xFF
+                            val pb = p and 0xFF
+                            total++
+                            if (pr > 180 && pb > pg + 15) pink++
+                        }
+                    }
+                }
+                if (total > 0 && pink.toDouble() / total > 0.30) {
+                    cells[PDBoard.index(row, col)] = Orb.HEART
+                    continue
+                }
+
                 val sampled = ArrayList<Pair<Double, Int>>()
                 for (dy in -half..half) {
                     for (dx in -half..half) {
