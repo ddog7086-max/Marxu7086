@@ -115,7 +115,8 @@ class PadService : Service() {
             }, mainHandler)
             startCapture()
             addOverlay()
-            mainHandler.post(analyzeTask)
+            // Static frame mode: no continuous polling. The user taps 分析 to
+            // grab one frame, recognise it and draw the route once.
         }
         return START_NOT_STICKY
     }
@@ -135,12 +136,14 @@ class PadService : Service() {
         )
     }
 
+    /**
+     * Static frame mode: grab ONE latest frame, recognise it, solve and draw the
+     * route once. No continuous polling, no lock loop. The fixed FALLBACK box
+     * covers the whole bottom board so no manual alignment is needed.
+     */
     private fun analyze() {
         val reader = imageReader ?: return
-        val now = System.currentTimeMillis()
-        if (now - lastAnalysis < ANALYZE_INTERVAL_MS) return
         val image = reader.acquireLatestImage() ?: return
-        lastAnalysis = now
 
         val bitmap = try {
             val plane = image.planes[0]
@@ -166,49 +169,19 @@ class PadService : Service() {
             image.close()
         } ?: return
 
-        // The floating window itself IS the capture box: move it to the orb board
-        // and drag its bottom-right corner to resize; its on-screen rect becomes
-        // the normalised region passed to the recognizer.
-        val pm = overlayParams ?: return
-        val metrics = resources.displayMetrics
-        val rect = PDBoardRect(
-            pm.x.toDouble() / metrics.widthPixels,
-            pm.y.toDouble() / metrics.heightPixels,
-            pm.width.toDouble() / metrics.widthPixels,
-            pm.height.toDouble() / metrics.heightPixels,
-        )
-        val board = OrbRecognizer.classify(bitmap, rect)
+        val board = OrbRecognizer.classify(bitmap, PDBoardRect.FALLBACK)
         bitmap.recycle()
         if (board == null) return
 
-        // Guard: if the box does not cover the whole 6x5 board (too many empty
-        // cells because it sits on a boss / background), do not solve or update
-        // the route — keep the last valid one instead of drawing garbage.
+        // Guard: not enough recognised orbs means the frame does not show a full board.
         val filled = board.cells.count { it != Orb.EMPTY }
         if (filled < 24) return
 
-        // Always refresh the standalone colour key so the user can verify colours
-        // while aligning, independent of whether the route is re-solved.
         colorKey?.setBoard(board)
-
-        // Lock onto the first board and keep showing its best combo route. Only
-        // re-solve when the board actually changes; a couple of misread cells
-        // (recognition noise) must not flip the route every tick. forceResolve
-        // (manual 重算) bypasses the lock so a re-solve always runs.
-        val current = board.cells
-        val locked = lockedCells
-        if (!forceResolve && locked != null && lockedRoute != null) {
-            var diff = 0
-            for (i in current.indices) if (current[i] != locked[i]) diff++
-            if (diff <= STABLE_CELL_TOLERANCE) return
-        }
 
         solverExecutor.execute {
             val route = PDSolver.solve(board)
             mainHandler.post {
-                forceResolve = false
-                lockedCells = current.copyOf()
-                lockedRoute = route
                 overlay?.show(board, route)
                 listener?.onBoard(board, route)
             }
@@ -219,19 +192,12 @@ class PadService : Service() {
 
     private fun addOverlay() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        val metrics = resources.displayMetrics
-        // Start the transparent box directly over the bottom orb board (FALLBACK),
-        // not up on the boss. In align mode the user drags/resizes it to frame the
-        // 6x5 grid; otherwise the layer is touch-through so orbs stay draggable.
-        val fb = PDBoardRect.FALLBACK
-        val width = (metrics.widthPixels * fb.width).toInt()
-        val height = (metrics.heightPixels * fb.height).toInt()
 
-        // --- Route layer: transparent, touch-through by default so the game orb
-        // remains draggable. Only becomes draggable when align mode is on.
+        // --- Full-screen transparent route layer, touch-through so orbs stay
+        // draggable. The grid maps onto the fixed FALLBACK full-board rectangle.
         val routeRoot = FrameLayout(this)
         val view = RouteBoardView(this)
-        view.showOrbs = false // overlay: draw route only, over the real orbs
+        view.showOrbs = false
         routeRoot.addView(
             view,
             FrameLayout.LayoutParams(
@@ -241,43 +207,26 @@ class PadService : Service() {
         )
 
         val params = WindowManager.LayoutParams(
-            width, height,
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT,
         )
-        params.gravity = Gravity.TOP or Gravity.START
-        params.x = (metrics.widthPixels * fb.x).toInt()
-        params.y = (metrics.heightPixels * fb.y).toInt()
         windowManager.addView(routeRoot, params)
 
-        // --- Small separate control window (touchable), top-right corner:
-        // [对准] toggles drag/resize, [重算] forces a re-solve.
+        // --- Small control window (touchable), top-right: tap 分析 to grab one
+        // frame, recognise it and draw the route once (static frame mode).
         val bar = FrameLayout(this)
-        val alignBtn = Button(this).apply {
-            text = "对准"
-            textSize = 12f
-            setPadding(24, 6, 24, 6)
-            setOnClickListener { toggleAlign() }
+        val analyzeBtn = Button(this).apply {
+            text = "分析"
+            textSize = 14f
+            setPadding(28, 8, 28, 8)
+            setOnClickListener { analyze() }
         }
-        val rerun = Button(this).apply {
-            text = "重算"
-            textSize = 12f
-            setPadding(24, 6, 24, 6)
-            setOnClickListener {
-                lockedCells = null
-                lockedRoute = null
-                forceResolve = true
-            }
-        }
-        val row = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.HORIZONTAL
-            addView(alignBtn)
-            addView(rerun)
-        }
-        bar.addView(row, FrameLayout.LayoutParams(
+        bar.addView(analyzeBtn, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT,
         ))
