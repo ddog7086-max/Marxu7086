@@ -171,13 +171,14 @@ class PadService : Service() {
             image.close()
         } ?: return
 
-        // Use the saved calibration box if the user has aligned it; otherwise
-        // fall back to an auto-fit square 6x5 grid.
+        // Default to the locked 6x5 grid measured from a real screenshot so
+        // recognition only reads inside the board; a saved calibration box
+        // still overrides it if the user aligned one.
         val sp = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val rect = if (sp.getBoolean("calibrated", false)) {
             loadRect()
         } else {
-            PDBoardRect.fit(bitmap.width.toDouble(), bitmap.height.toDouble())
+            PDBoardRect.LOCKED
         }
         overlay?.boardRect = rect
 

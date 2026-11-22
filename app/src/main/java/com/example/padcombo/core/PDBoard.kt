@@ -31,6 +31,12 @@ data class PDBoardRect(
         // Align mode still allows fine drag/resize if a device differs.
         val FALLBACK = PDBoardRect(0.01, 0.60, 0.985, 0.36)
 
+        // Locked 6x5 grid measured directly from a real 1080x2448 screenshot.
+        // Equal-dividing this rect puts every cell centre exactly on an orb, so
+        // recognition never reads anything outside the board (HP bar, party row,
+        // background). Used as the default; a saved calibration box still overrides.
+        val LOCKED = PDBoardRect(0.00926, 0.58363, 0.97778, 0.37277)
+
         /**
          * Auto-fit a square 6x5 grid inside a container of [containerW] x
          * [containerH] pixels, horizontally centred and placed in the lower

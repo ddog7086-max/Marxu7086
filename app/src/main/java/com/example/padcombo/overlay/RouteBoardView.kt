@@ -34,7 +34,8 @@ class RouteBoardView : View {
     private val orbPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(245, 255, 255, 255)
-        strokeWidth = 2.5f
+        strokeWidth = 5f
+        strokeCap = Paint.Cap.ROUND
         style = Paint.Style.STROKE
     }
     private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -75,7 +76,7 @@ class RouteBoardView : View {
         // Main preview fills itself; the overlay uses the calibrated rect,
         // falling back to an auto-fit square grid if none was saved.
         val fb = if (showOrbs) PDBoardRect.FALLBACK
-            else (boardRect ?: PDBoardRect.fit(width.toDouble(), height.toDouble()))
+            else (boardRect ?: PDBoardRect.LOCKED)
         val ox = (fb.x * width).toFloat()
         val oy = (fb.y * height).toFloat()
         val cellW = (fb.width * width / PDBoard.COLS).toFloat()
