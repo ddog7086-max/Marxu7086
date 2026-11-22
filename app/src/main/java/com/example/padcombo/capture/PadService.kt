@@ -126,7 +126,7 @@ class PadService : Service() {
         val image = reader.acquireLatestImage() ?: return
         lastAnalysis = now
 
-        val bitmap: Bitmap? = try {
+        val bitmap = try {
             val plane = image.planes[0]
             val buffer = plane.buffer
             val pixelStride = plane.pixelStride
@@ -234,10 +234,10 @@ class PadService : Service() {
     private fun loadRect(): PDBoardRect {
         val sp = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return PDBoardRect(
-            sp.getFloat(KEY_X, PDBoardRect.FALLBACK.x.toDouble()).toDouble(),
-            sp.getFloat(KEY_Y, PDBoardRect.FALLBACK.y.toDouble()).toDouble(),
-            sp.getFloat(KEY_W, PDBoardRect.FALLBACK.width.toDouble()).toDouble(),
-            sp.getFloat(KEY_H, PDBoardRect.FALLBACK.height.toDouble()).toDouble(),
+            sp.getFloat(KEY_X, PDBoardRect.FALLBACK.x.toFloat()).toDouble(),
+            sp.getFloat(KEY_Y, PDBoardRect.FALLBACK.y.toFloat()).toDouble(),
+            sp.getFloat(KEY_W, PDBoardRect.FALLBACK.width.toFloat()).toDouble(),
+            sp.getFloat(KEY_H, PDBoardRect.FALLBACK.height.toFloat()).toDouble(),
         )
     }
 
