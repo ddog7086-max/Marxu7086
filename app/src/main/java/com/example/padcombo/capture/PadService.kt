@@ -33,7 +33,6 @@ import com.example.padcombo.core.PDBoardRect
 import com.example.padcombo.core.PDRoute
 import com.example.padcombo.core.PDSolver
 import com.example.padcombo.overlay.RouteBoardView
-import com.example.padcombo.overlay.CalibrationFrameView
 import com.example.padcombo.overlay.ColorKeyView
 import java.util.concurrent.Executors
 import kotlin.math.min
@@ -63,8 +62,6 @@ class PadService : Service() {
     private var controlBar: FrameLayout? = null
     private var colorKey: ColorKeyView? = null
     private var colorKeyBar: FrameLayout? = null
-    private var calibrationFrame: CalibrationFrameView? = null
-    private var alignMode = false
 
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
@@ -171,15 +168,9 @@ class PadService : Service() {
             image.close()
         } ?: return
 
-        // Default to the locked 6x5 grid measured from a real screenshot so
-        // recognition only reads inside the board; a saved calibration box
-        // still overrides it if the user aligned one.
-        val sp = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val rect = if (sp.getBoolean("calibrated", false)) {
-            loadRect()
-        } else {
-            PDBoardRect.LOCKED
-        }
+        // Always use the locked 6x5 grid measured from a real screenshot;
+        // no manual calibration. Recognition only reads inside this board.
+        val rect = PDBoardRect.LOCKED
         overlay?.boardRect = rect
 
         val board = OrbRecognizer.classify(bitmap, rect)
@@ -220,22 +211,6 @@ class PadService : Service() {
             ),
         )
 
-        // Draggable/resizable calibration frame; hidden until 对准 is tapped.
-        val frame = CalibrationFrameView(this)
-        frame.visibility = View.GONE
-        frame.onChanged = { r ->
-            saveRect(r)
-            overlay?.boardRect = r
-        }
-        routeRoot.addView(
-            frame,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT,
-            ),
-        )
-        calibrationFrame = frame
-
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -253,22 +228,14 @@ class PadService : Service() {
         val col = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
         }
-        val alignBtn = Button(this).apply {
-            text = "对准"
-            textSize = 14f
-            setPadding(24, 8, 24, 8)
-            setOnClickListener { toggleAlign() }
-        }
         val analyzeBtn = Button(this).apply {
             text = "分析"
             textSize = 14f
             setPadding(28, 8, 28,  8)
             setOnClickListener { analyze() }
         }
-        // Stack buttons vertically: a horizontal row pushed 分析 off-screen right.
         val btnW = android.widget.LinearLayout.LayoutParams(
             150, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
-        col.addView(alignBtn, btnW)
         col.addView(analyzeBtn, btnW)
 
         // Opacity slider: 80 (light) .. 255 (solid). Persisted and applied live.
@@ -336,55 +303,6 @@ class PadService : Service() {
         controlBar = bar
         colorKey = keyView
         colorKeyBar = keyBar
-        alignMode = false
-    }
-
-    /** Toggle align mode: show the draggable/resizable frame to align the box. */
-    private fun toggleAlign() {
-        alignMode = !alignMode
-        val params = overlayParams ?: return
-        val root = rootView ?: return
-        val frame = calibrationFrame ?: return
-        if (alignMode) {
-            val sp = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            frame.rect = if (sp.getBoolean("calibrated", false)) {
-                loadRect()
-            } else {
-                PDBoardRect.fit(
-                    resources.displayMetrics.widthPixels.toDouble(),
-                    resources.displayMetrics.heightPixels.toDouble(),
-                )
-            }
-            frame.visibility = View.VISIBLE
-            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
-        } else {
-            frame.visibility = View.GONE
-            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-        }
-        windowManager.updateViewLayout(root, params)
-    }
-
-    /** Persist the aligned normalised board box so every analysis reuses it. */
-    private fun saveRect(r: PDBoardRect) {
-        getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putFloat(KEY_X, r.x.toFloat())
-            .putFloat(KEY_Y, r.y.toFloat())
-            .putFloat(KEY_W, r.width.toFloat())
-            .putFloat(KEY_H, r.height.toFloat())
-            .putBoolean("calibrated", true)
-            .apply()
-    }
-
-    // ------------------------------------------------------------- rect
-
-    private fun loadRect(): PDBoardRect {
-        val sp = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        return PDBoardRect(
-            sp.getFloat(KEY_X, PDBoardRect.FALLBACK.x.toFloat()).toDouble(),
-            sp.getFloat(KEY_Y, PDBoardRect.FALLBACK.y.toFloat()).toDouble(),
-            sp.getFloat(KEY_W, PDBoardRect.FALLBACK.width.toFloat()).toDouble(),
-            sp.getFloat(KEY_H, PDBoardRect.FALLBACK.height.toFloat()).toDouble(),
-        )
     }
 
     private fun buildNotification(): Notification {
@@ -423,8 +341,6 @@ class PadService : Service() {
         colorKeyBar = null
         colorKey = null
         overlay = null
-        calibrationFrame = null
-        alignMode = false
     }
 
     private fun teardown() {
@@ -465,10 +381,6 @@ class PadService : Service() {
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
 
         const val PREFS = "padcombo_calibration"
-        const val KEY_X = "rect_x"
-        const val KEY_Y = "rect_y"
-        const val KEY_W = "rect_w"
-        const val KEY_H = "rect_h"
         const val KEY_ALPHA = "route_alpha"
     }
 }
