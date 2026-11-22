@@ -252,9 +252,6 @@ class PadService : Service() {
         val col = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
         }
-        val row = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.HORIZONTAL
-        }
         val alignBtn = Button(this).apply {
             text = "对准"
             textSize = 14f
@@ -267,8 +264,11 @@ class PadService : Service() {
             setPadding(28, 8, 28,  8)
             setOnClickListener { analyze() }
         }
-        row.addView(alignBtn)
-        row.addView(analyzeBtn)
+        // Stack buttons vertically: a horizontal row pushed 分析 off-screen right.
+        val btnW = android.widget.LinearLayout.LayoutParams(
+            150, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+        col.addView(alignBtn, btnW)
+        col.addView(analyzeBtn, btnW)
 
         // Opacity slider: 80 (light) .. 255 (solid). Persisted and applied live.
         val sp = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -286,7 +286,6 @@ class PadService : Service() {
                 override fun onStopTrackingTouch(s: android.widget.SeekBar?) {}
             })
         }
-        col.addView(row)
         col.addView(alphaBar, android.widget.LinearLayout.LayoutParams(
             220, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
         ))
