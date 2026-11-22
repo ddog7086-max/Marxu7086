@@ -57,6 +57,9 @@ class PadService : Service() {
     private lateinit var windowManager: WindowManager
     private var overlay: RouteBoardView? = null
     private var overlayParams: WindowManager.LayoutParams? = null
+    private var rootView: FrameLayout? = null
+    private var controlBar: FrameLayout? = null
+    private var alignMode = false
 
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
@@ -208,15 +211,18 @@ class PadService : Service() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val metrics = resources.displayMetrics
         // Start the transparent box directly over the bottom orb board (FALLBACK),
-        // not up on the boss. User then drags/resizes it to frame the 6x5 grid.
+        // not up on the boss. In align mode the user drags/resizes it to frame the
+        // 6x5 grid; otherwise the layer is touch-through so orbs stay draggable.
         val fb = PDBoardRect.FALLBACK
         val width = (metrics.widthPixels * fb.width).toInt()
         val height = (metrics.heightPixels * fb.height).toInt()
 
-        val container = FrameLayout(this)
+        // --- Route layer: transparent, touch-through by default so the game orb
+        // remains draggable. Only becomes draggable when align mode is on.
+        val routeRoot = FrameLayout(this)
         val view = RouteBoardView(this)
         view.showOrbs = false // overlay: draw route only, over the real orbs
-        container.addView(
+        routeRoot.addView(
             view,
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -224,39 +230,79 @@ class PadService : Service() {
             ),
         )
 
-        // Manual re-solve button: clear the locked board so the next analyze pass
-        // recomputes the best combo route instead of waiting for a board change.
-        val rerun = Button(this).apply {
-            text = "重算"
-            textSize = 12f
-            setPadding(28, 8, 28, 8)
-            setOnClickListener {
-                lockedCells = null
-                lockedRoute = null
-            }
-        }
-        val btnParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-        )
-        btnParams.gravity = Gravity.TOP or Gravity.END
-        container.addView(rerun, btnParams)
-
         val params = WindowManager.LayoutParams(
             width, height,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
             PixelFormat.TRANSLUCENT,
         )
         params.gravity = Gravity.TOP or Gravity.START
         params.x = (metrics.widthPixels * fb.x).toInt()
         params.y = (metrics.heightPixels * fb.y).toInt()
+        windowManager.addView(routeRoot, params)
 
-        container.setOnTouchListener(OverlayDrag(params, windowManager))
-        windowManager.addView(container, params)
+        // --- Small separate control window (touchable), top-right corner:
+        // [对准] toggles drag/resize, [重算] forces a re-solve.
+        val bar = FrameLayout(this)
+        val alignBtn = Button(this).apply {
+            text = "对准"
+            textSize = 12f
+            setPadding(24, 6, 24, 6)
+            setOnClickListener { toggleAlign() }
+        }
+        val rerun = Button(this).apply {
+            text = "重算"
+            textSize = 12f
+            setPadding(24, 6, 24, 6)
+            setOnClickListener {
+                lockedCells = null
+                lockedRoute = null
+            }
+        }
+        val row = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            addView(alignBtn)
+            addView(rerun)
+        }
+        bar.addView(row, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+        ))
+        val barParams = WindowManager.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            PixelFormat.TRANSLUCENT,
+        )
+        barParams.gravity = Gravity.TOP or Gravity.END
+        barParams.x = 8
+        barParams.y = 40
+        windowManager.addView(bar, barParams)
+
         overlay = view
         overlayParams = params
+        rootView = routeRoot
+        controlBar = bar
+        alignMode = false
+    }
+
+    /** Toggle align mode: on = route layer draggable/resizable; off = touch-through. */
+    private fun toggleAlign() {
+        alignMode = !alignMode
+        val params = overlayParams ?: return
+        val root = rootView ?: return
+        if (alignMode) {
+            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            root.setOnTouchListener(OverlayDrag(params, windowManager))
+        } else {
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            root.setOnTouchListener(null)
+        }
+        windowManager.updateViewLayout(root, params)
     }
 
     private class OverlayDrag(
@@ -290,8 +336,11 @@ class PadService : Service() {
                 }
                 MotionEvent.ACTION_MOVE -> {
                     if (mode == 1) {
-                        params.width = (startW + (event.rawX - startX)).toInt().coerceAtLeast(160)
-                        params.height = (startH + (event.rawY - startY)).toInt().coerceAtLeast(160)
+                        // Lock the 6:5 (cols:rows) aspect so the grid never stretches
+                        // out of shape; width drives height = width * 5/6.
+                        val newW = (startW + (event.rawX - startX)).toInt().coerceAtLeast(200)
+                        params.width = newW
+                        params.height = (newW * 5f / 6f).toInt()
                     } else {
                         params.x = startParamX + (event.rawX - startX).toInt()
                         params.y = startParamY + (event.rawY - startY).toInt()
@@ -341,10 +390,19 @@ class PadService : Service() {
         mainHandler.removeCallbacks(analyzeTask)
         lockedCells = null
         lockedRoute = null
-        overlay?.let { runCatching { windowManager.removeView(it) } }
-        overlay = null
+        detachOverlays()
         solverExecutor.shutdownNow()
         solverExecutor = Executors.newSingleThreadExecutor()
+    }
+
+    /** Remove the real root views added to WindowManager (not the inner RouteBoardView). */
+    private fun detachOverlays() {
+        rootView?.let { runCatching { windowManager.removeView(it) } }
+        controlBar?.let { runCatching { windowManager.removeView(it) } }
+        rootView = null
+        controlBar = null
+        overlay = null
+        alignMode = false
     }
 
     private fun teardown() {
@@ -352,8 +410,7 @@ class PadService : Service() {
         lockedCells = null
         lockedRoute = null
         solverExecutor.shutdownNow()
-        overlay?.let { runCatching { windowManager.removeView(it) } }
-        overlay = null
+        detachOverlays()
         virtualDisplay?.release()
         virtualDisplay = null
         imageReader?.close()
