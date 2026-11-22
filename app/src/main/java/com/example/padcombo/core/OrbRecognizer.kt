@@ -42,32 +42,26 @@ object OrbRecognizer {
                 val py = (fy * height).toInt()
                 if (px < 2 || px >= width - 2 || py < 2 || py >= height - 2) continue
 
-                // The orb's pure base colour sits on the outer ring of the circle;
-                // the centre holds the character face (skin/light), so reading the
-                // centre misclassifies or empty-drops light faces. Sample the
-                // saturated outer ring instead and keep the most saturated pixels.
+                // Sample the cell's centre window and keep only the most saturated
+                // pixels: this reads the orb's true base colour. The outer ring is
+                // wrong for the square pink heart (white highlight -> read as fire).
                 val cellW = rect.width * width / PDBoard.COLS
                 val cellH = rect.height * height / PDBoard.ROWS
-                val rc = minOf(cellW, cellH) / 2f
+                val half = maxOf(3, (minOf(cellW, cellH) / 6).toInt())
 
                 val sampled = ArrayList<Pair<Double, Int>>()
-                for (a in 0 until 360 step 15) {
-                    val rad = Math.toRadians(a.toDouble())
-                    val sx = px + (rc * 0.55 * Math.cos(rad)).toInt()
-                    val sy = py + (rc * 0.55 * Math.sin(rad)).toInt()
-                    for (dy in -3..3) {
-                        for (dx in -3..3) {
-                            val x = sx + dx
-                            val y = sy + dy
-                            if (x in 0 until width && y in 0 until height) {
-                                val pixel = pixels[y * width + x]
-                                sampled.add(saturationOf(pixel) to pixel)
-                            }
+                for (dy in -half..half) {
+                    for (dx in -half..half) {
+                        val x = px + dx
+                        val y = py + dy
+                        if (x in 0 until width && y in 0 until height) {
+                            val pixel = pixels[y * width + x]
+                            sampled.add(saturationOf(pixel) to pixel)
                         }
                     }
                 }
                 sampled.sortByDescending { it.first }
-                val topN = maxOf(12, sampled.size / 6)
+                val topN = maxOf(8, sampled.size / 6)
 
                 var r = 0.0
                 var g = 0.0
