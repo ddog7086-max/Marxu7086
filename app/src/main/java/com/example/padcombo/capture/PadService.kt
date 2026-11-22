@@ -326,7 +326,7 @@ class PadService : Service() {
         )
         keyParams.gravity = Gravity.TOP or Gravity.START
         keyParams.x = 8
-        keyParams.y = 8
+        keyParams.y = 70
         windowManager.addView(keyBar, keyParams)
 
         overlay = view

@@ -39,8 +39,17 @@ class ColorKeyView : View {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val c = cells ?: return
         val d = resources.displayMetrics.density
+
+        // Always draw the rounded panel so the user can see where the count sits,
+        // even before the first analysis.
+        canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), 8f * d, 8f * d, bg)
+
+        val c = cells
+        if (c == null) {
+            canvas.drawText("按「分析」", 10f * d, 20f * d, text)
+            return
+        }
 
         val counts = IntArray(Orb.COLOR_COUNT)
         var filled = 0
@@ -51,16 +60,14 @@ class ColorKeyView : View {
             }
         }
 
-        canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), 8f * d, 8f * d, bg)
-
-        canvas.drawText("珠 $filled/30", 10f * d, 16f * d, text)
+        canvas.drawText("珠 $filled/30", 10f * d, 18f * d, text)
 
         val names = arrayOf("火", "水", "木", "光", "闇", "心")
         for (i in 0 until Orb.COLOR_COUNT) {
             val row = i / 3
             val col = i % 3
             val cx = (12 + col * 52) * d
-            val cy = (32 + row * 20) * d
+            val cy = (34 + row * 20) * d
             dot.color = orbColor(i)
             canvas.drawCircle(cx, cy, 6f * d, dot)
             canvas.drawText("${names[i]}×${counts[i]}", cx + 10f * d, cy + 4f * d, text)

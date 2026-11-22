@@ -52,7 +52,7 @@ class RouteBoardView : View {
         color = Color.WHITE
         textSize = 28f
         isFakeBoldText = true
-        textAlign = Paint.Align.CENTER
+        textAlign = Paint.Align.LEFT
     }
 
     fun show(board: PDBoard, route: PDRoute) {
@@ -139,7 +139,7 @@ class RouteBoardView : View {
             canvas.drawText(
                 "${route.combos} combo · ${path.size} 格",
                 16f * td,
-                86f * td,
+                150f * td,
                 textPaint,
             )
         }
