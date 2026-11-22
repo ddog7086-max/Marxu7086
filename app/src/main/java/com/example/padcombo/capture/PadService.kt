@@ -189,9 +189,10 @@ class PadService : Service() {
 
         solverExecutor.execute {
             val sp = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            // Complexity 0..20 -> route length cap 10..30 cells.
-            val maxLen = 10 + sp.getInt(KEY_COMPLEX, 8)
-            val route = PDSolver.solve(board, maxLen = maxLen)
+            // Complexity 0..20 -> route length cap 10..30 cells and search effort.
+            val level = sp.getInt(KEY_COMPLEX, 8)
+            val maxLen = 10 + level
+            val route = PDSolver.solve(board, maxLen = maxLen, complexity = level)
             mainHandler.post {
                 overlay?.show(board, route)
                 listener?.onBoard(board, route)

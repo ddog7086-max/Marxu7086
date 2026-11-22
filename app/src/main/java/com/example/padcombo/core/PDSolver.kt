@@ -38,10 +38,17 @@ object PDSolver {
     fun solve(
         board: PDBoard,
         maxLen: Int = 30,
-        budgetPerRestart: Int = 2200,
-        restarts: Int = 12,
+        complexity: Int = 8,
+        budgetPerRestart: Int = 0,
+        restarts: Int = 0,
         seed: ULong = 0x123456789ABCDEF0uL,
     ): PDRoute {
+        // Complexity 0..20 scales search effort (more restarts / budget) while a
+        // fixed cap keeps the single-frame analysis fast on a phone.
+        val level = complexity.coerceIn(0, 20)
+        val effRestarts = if (restarts > 0) restarts else 8 + level
+        val effBudget = if (budgetPerRestart > 0) budgetPerRestart else 1500 + level * 120
+
         var bestPath: List<Int> = emptyList()
         var bestScore = Double.NEGATIVE_INFINITY
         var bestCombos = 0
@@ -51,12 +58,21 @@ object PDSolver {
         // more elaborate path).
         for (k in 0 until MULTI_RUNS) {
             val rng = SplitMix64(seed + k.toULong())
-            val (score, path, combos) = saOnce(board, rng, maxLen, budgetPerRestart, restarts)
+            val (score, path, combos) = saOnce(board, rng, maxLen, effBudget, effRestarts)
             if (score > bestScore || (score == bestScore && path.size > bestPath.size)) {
                 bestScore = score
                 bestPath = path
                 bestCombos = combos
             }
+        }
+        // Re-evaluate the kept path independently so the displayed combo count
+        // always matches the route actually drawn.
+        val (finalScore, finalCombos) = evaluate(board, bestPath)
+        if (finalScore > bestScore) {
+            bestScore = finalScore
+            bestCombos = finalCombos
+        } else {
+            bestCombos = finalCombos
         }
         return PDRoute(bestPath, bestCombos)
     }
@@ -73,7 +89,7 @@ object PDSolver {
         var bestCombos = 0
 
         // Seed from many random drags of varied length to give SA diverse starts.
-        repeat(24) {
+        repeat(36) {
             val start = rng.nextInt(PDBoard.CELL_COUNT)
             val length = rng.nextInt(4, maxLen + 1)
             val candidate = randomPathFrom(start, length, maxLen, rng)
@@ -93,35 +109,61 @@ object PDSolver {
             repeat(budget) {
                 var candidate = currentPath
 
-                if (rng.nextUnit() < 0.6) {
-                    // Re-route the tail from a random cell.
-                    val cut = if (candidate.size > 1) rng.nextInt(1, candidate.size) else 1
-                    val head = candidate.subList(0, cut)
-                    val room = maxLen - head.size
-                    if (room >= 1) {
-                        val extra = rng.nextInt(1, room + 1)
-                        val tail = randomPathFrom(
-                            head[head.size - 1], extra, maxLen, rng, head.toSet(),
-                        )
-                        candidate = head + tail.drop(1)
-                    } else {
-                        return@repeat
+                val roll = rng.nextUnit()
+                when {
+                    roll < 0.55 -> {
+                        // Re-route the tail from a random cell.
+                        val cut = if (candidate.size > 1) rng.nextInt(1, candidate.size) else 1
+                        val head = candidate.subList(0, cut)
+                        val room = maxLen - head.size
+                        if (room >= 1) {
+                            val extra = rng.nextInt(1, room + 1)
+                            val tail = randomPathFrom(
+                                head[head.size - 1], extra, maxLen, rng, head.toSet(),
+                            )
+                            candidate = head + tail.drop(1)
+                        } else {
+                            return@repeat
+                        }
                     }
-                } else {
-                    // Wiggle a single step: pick a neighbour not already on the
-                    // path so no cell is visited twice (no overlapping line).
-                    if (candidate.size < 2) return@repeat
-                    val i = rng.nextInt(1, candidate.size)
-                    val used = candidate.toSet()
-                    val options = neighbourIndicesOf(candidate[i - 1]).filter { it !in used }
-                    if (options.isEmpty()) return@repeat
-                    candidate = candidate.toMutableList().also {
-                        it[i] = options[rng.nextInt(options.size)]
+                    roll < 0.80 -> {
+                        // Wiggle a single step: pick a neighbour not already on the
+                        // path so no cell is visited twice (no overlapping line).
+                        if (candidate.size < 2) return@repeat
+                        val i = rng.nextInt(1, candidate.size)
+                        val used = candidate.toSet()
+                        val options = neighbourIndicesOf(candidate[i - 1]).filter { it !in used }
+                        if (options.isNotEmpty()) {
+                            candidate = candidate.toMutableList().also {
+                                it[i] = options[rng.nextInt(options.size)]
+                            }
+                            val broken = candidate.indices.drop(1).firstOrNull { j ->
+                                !areAdjacent(candidate[j - 1], candidate[j])
+                            }
+                            if (broken != null) candidate = candidate.subList(0, broken)
+                        }
                     }
-                    val broken = candidate.indices.drop(1).firstOrNull { j ->
-                        !areAdjacent(candidate[j - 1], candidate[j])
+                    roll < 0.90 && candidate.size >= 3 -> {
+                        // Swap two adjacent steps; keep the walk valid & non-repeating.
+                        val i = rng.nextInt(1, candidate.size)
+                        val q = candidate.toMutableList()
+                        val t = q[i - 1]; q[i - 1] = q[i]; q[i] = t
+                        val linksOk = (i - 1 == 0 || areAdjacent(q[i - 2], q[i - 1])) &&
+                            (i == candidate.size - 1 || areAdjacent(q[i], q[i + 1]))
+                        if (linksOk && q.toSet().size == q.size) candidate = q
                     }
-                    if (broken != null) candidate = candidate.subList(0, broken)
+                    candidate.size >= 3 && candidate.size < maxLen -> {
+                        // Insert one cell between two consecutive steps (a zigzag).
+                        val i = rng.nextInt(1, candidate.size)
+                        val a = candidate[i - 1]; val b = candidate[i]
+                        val x = neighbourIndicesOf(a)
+                            .filter { it != b && areAdjacent(it, b) && it !in candidate }
+                        if (x.isNotEmpty()) {
+                            val q = candidate.toMutableList()
+                            q.add(i, x[rng.nextInt(x.size)])
+                            candidate = q
+                        }
+                    }
                 }
 
                 if (candidate.size < 2) return@repeat
