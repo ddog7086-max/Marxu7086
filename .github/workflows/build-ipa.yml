@@ -1,15 +1,17 @@
 name: build-ipa
-
 on:
   workflow_dispatch:
-
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
       - name: Unpack project
-        run: unzip -o PadCombo-ios.zip -d unpacked
+        run: |
+          ZIP=$(find . -name "PadCombo-ios.zip" | head -1)
+          echo "zip found at: $ZIP"
+          unzip -o "$ZIP" -d unpacked
+          ls -la unpacked
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate project
