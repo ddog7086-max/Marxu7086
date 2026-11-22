@@ -21,6 +21,8 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.widget.Button
+import android.widget.FrameLayout
 import androidx.core.app.NotificationCompat
 import android.app.Service
 import com.example.padcombo.R
@@ -183,10 +185,37 @@ class PadService : Service() {
 
     private fun addOverlay() {
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        val view = RouteBoardView(this)
         val metrics = resources.displayMetrics
         val width = (metrics.widthPixels * 0.72f).toInt()
         val height = (width * 5f / 6f + 60f).toInt()
+
+        val container = FrameLayout(this)
+        val view = RouteBoardView(this)
+        container.addView(
+            view,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            ),
+        )
+
+        // Manual re-solve button: clear the locked board so the next analyze pass
+        // recomputes the best combo route instead of waiting for a board change.
+        val rerun = Button(this).apply {
+            text = "重算"
+            textSize = 12f
+            setPadding(28, 8, 28, 8)
+            setOnClickListener {
+                lockedCells = null
+                lockedRoute = null
+            }
+        }
+        val btnParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+        )
+        btnParams.gravity = Gravity.TOP or Gravity.END
+        container.addView(rerun, btnParams)
 
         val params = WindowManager.LayoutParams(
             width, height,
@@ -199,8 +228,8 @@ class PadService : Service() {
         params.x = (metrics.widthPixels - width) / 2
         params.y = (metrics.heightPixels * 0.08f).toInt()
 
-        view.setOnTouchListener(OverlayDrag(params, windowManager))
-        windowManager.addView(view, params)
+        container.setOnTouchListener(OverlayDrag(params, windowManager))
+        windowManager.addView(container, params)
         overlay = view
         overlayParams = params
     }

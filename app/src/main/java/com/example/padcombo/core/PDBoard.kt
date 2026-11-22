@@ -26,7 +26,7 @@ data class PDBoardRect(
     var height: Double,
 ) {
     companion object {
-        val FALLBACK = PDBoardRect(0.07, 0.615, 0.86, 0.235)
+        val FALLBACK = PDBoardRect(0.01, 0.585, 0.985, 0.31)
     }
 }
 

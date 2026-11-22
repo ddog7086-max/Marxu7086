@@ -16,13 +16,13 @@ import kotlin.math.min
  */
 object OrbRecognizer {
 
-    /** Target hue angle in degrees (0..360) for each orb. */
-    private const val H_FIRE = 0.0      // red
-    private const val H_WATER = 215.0   // blue
-    private const val H_WOOD = 130.0    // green
-    private const val H_LIGHT = 55.0    // yellow
-    private const val H_DARK = 275.0    // purple
-    private const val H_HEART = 330.0   // pink
+    /** Target hue angle in degrees (0..360) for each orb, sampled from this skin. */
+    private const val H_FIRE = 8.0      // red-orange
+    private const val H_WATER = 208.0    // bright blue
+    private const val H_WOOD = 121.0    // green
+    private const val H_LIGHT = 50.0    // yellow
+    private const val H_DARK = 279.0    // purple
+    private const val H_HEART = 325.0   // pink
 
     fun classify(bitmap: Bitmap, rect: PDBoardRect): PDBoard? {
         val width = bitmap.width
