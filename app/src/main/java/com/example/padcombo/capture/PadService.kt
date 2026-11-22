@@ -210,6 +210,7 @@ class PadService : Service() {
         val routeRoot = FrameLayout(this)
         val view = RouteBoardView(this)
         view.showOrbs = false
+        view.routeAlpha = getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_ALPHA, 245)
         routeRoot.addView(
             view,
             FrameLayout.LayoutParams(
@@ -246,8 +247,11 @@ class PadService : Service() {
         windowManager.addView(routeRoot, params)
 
         // --- Small control window (touchable), top-right: 对准 aligns the box,
-        // 分析 grabs one frame, recognises it and draws the route once.
+        // 分析 grabs one frame; the slider sets route opacity.
         val bar = FrameLayout(this)
+        val col = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+        }
         val row = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.HORIZONTAL
         }
@@ -260,12 +264,32 @@ class PadService : Service() {
         val analyzeBtn = Button(this).apply {
             text = "分析"
             textSize = 14f
-            setPadding(28, 8, 28, 8)
+            setPadding(28, 8, 28,  8)
             setOnClickListener { analyze() }
         }
         row.addView(alignBtn)
         row.addView(analyzeBtn)
-        bar.addView(row, FrameLayout.LayoutParams(
+
+        // Opacity slider: 80 (light) .. 255 (solid). Persisted and applied live.
+        val sp = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val alphaBar = android.widget.SeekBar(this).apply {
+            max = 175
+            progress = sp.getInt(KEY_ALPHA, 245) - 80
+            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: android.widget.SeekBar?, p: Int, fromUser: Boolean) {
+                    val a = p + 80
+                    overlay?.routeAlpha = a
+                    sp.edit().putInt(KEY_ALPHA, a).apply()
+                }
+                override fun onStartTrackingTouch(s: android.widget.SeekBar?) {}
+                override fun onStopTrackingTouch(s: android.widget.SeekBar?) {}
+            })
+        }
+        col.addView(row)
+        col.addView(alphaBar, android.widget.LinearLayout.LayoutParams(
+            220, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT,
+        ))
+        bar.addView(col, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT,
         ))
@@ -444,5 +468,6 @@ class PadService : Service() {
         const val KEY_Y = "rect_y"
         const val KEY_W = "rect_w"
         const val KEY_H = "rect_h"
+        const val KEY_ALPHA = "route_alpha"
     }
 }

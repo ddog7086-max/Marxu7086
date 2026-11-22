@@ -45,6 +45,16 @@ class RouteBoardView : View {
         color = Color.WHITE
         style = Paint.Style.FILL
     }
+
+    /** Visibility of the whole route (line / start dot / end arrow), 0..255. */
+    var routeAlpha: Int = 245
+        set(value) {
+            field = value.coerceIn(0, 255)
+            linePaint.alpha = field
+            dotPaint.alpha = field
+            fillPaint.alpha = field
+            invalidate()
+        }
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = 28f
