@@ -37,7 +37,7 @@ object PDSolver {
         maxLen: Int = 24,
         budgetPerRestart: Int = 1400,
         restarts: Int = 7,
-        seed: ULong = 0x5DEECE66D00000001uL,
+        seed: ULong = 0x123456789ABCDEF0uL,
     ): PDRoute {
         val rng = SplitMix64(seed)
 
