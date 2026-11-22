@@ -151,15 +151,20 @@ object PDSolver {
 
     private fun randomPathFrom(start: Int, length: Int, maxLen: Int, rng: SplitMix64): List<Int> {
         val path = mutableListOf(start)
+        val visited = HashSet<Int>()
+        visited.add(start)
         var previous = -1
         var last = start
         val target = minOf(length, maxLen)
 
         while (path.size < target) {
-            val options = neighbourIndicesOf(last).filter { it != previous }
+            // Never revisit a cell: a route that loops back over an already-visited
+            // cell draws overlapping segments the player cannot follow.
+            val options = neighbourIndicesOf(last).filter { it != previous && it !in visited }
             if (options.isEmpty()) break
             val next = options[rng.nextInt(options.size)]
             path.add(next)
+            visited.add(next)
             previous = last
             last = next
         }

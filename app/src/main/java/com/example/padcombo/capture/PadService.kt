@@ -33,6 +33,7 @@ import com.example.padcombo.core.PDBoardRect
 import com.example.padcombo.core.PDRoute
 import com.example.padcombo.core.PDSolver
 import com.example.padcombo.overlay.RouteBoardView
+import com.example.padcombo.overlay.ColorKeyView
 import java.util.concurrent.Executors
 import kotlin.math.min
 
@@ -59,6 +60,8 @@ class PadService : Service() {
     private var overlayParams: WindowManager.LayoutParams? = null
     private var rootView: FrameLayout? = null
     private var controlBar: FrameLayout? = null
+    private var colorKey: ColorKeyView? = null
+    private var colorKeyBar: FrameLayout? = null
     private var alignMode = false
 
     private var projection: MediaProjection? = null
@@ -183,6 +186,10 @@ class PadService : Service() {
         val filled = board.cells.count { it != Orb.EMPTY }
         if (filled < 24) return
 
+        // Always refresh the standalone colour key so the user can verify colours
+        // while aligning, independent of whether the route is re-solved.
+        colorKey?.setBoard(board)
+
         // Lock onto the first board and keep showing its best combo route. Only
         // re-solve when the board actually changes; a couple of misread cells
         // (recognition noise) must not flip the route every tick.
@@ -283,10 +290,37 @@ class PadService : Service() {
         barParams.y = 40
         windowManager.addView(bar, barParams)
 
+        // --- Standalone colour key window, fixed at the screen's top-left corner,
+        // touch-through: never sits inside the route box or covers an orb.
+        val keyView = ColorKeyView(this)
+        val keyBar = FrameLayout(this)
+        keyBar.addView(
+            keyView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+            ),
+        )
+        val keyParams = WindowManager.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT,
+        )
+        keyParams.gravity = Gravity.TOP or Gravity.START
+        keyParams.x = 8
+        keyParams.y = 8
+        windowManager.addView(keyBar, keyParams)
+
         overlay = view
         overlayParams = params
         rootView = routeRoot
         controlBar = bar
+        colorKey = keyView
+        colorKeyBar = keyBar
         alignMode = false
     }
 
@@ -302,6 +336,7 @@ class PadService : Service() {
             params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
             root.setOnTouchListener(null)
         }
+        overlay?.showGrid = alignMode
         windowManager.updateViewLayout(root, params)
     }
 
@@ -399,8 +434,11 @@ class PadService : Service() {
     private fun detachOverlays() {
         rootView?.let { runCatching { windowManager.removeView(it) } }
         controlBar?.let { runCatching { windowManager.removeView(it) } }
+        colorKeyBar?.let { runCatching { windowManager.removeView(it) } }
         rootView = null
         controlBar = null
+        colorKeyBar = null
+        colorKey = null
         overlay = null
         alignMode = false
     }

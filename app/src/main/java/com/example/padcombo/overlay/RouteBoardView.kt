@@ -12,10 +12,10 @@ import com.example.padcombo.core.PDBoard
 import com.example.padcombo.core.PDRoute
 
 /**
- * Floating route layer. On the overlay it is transparent and draws ONLY the white
- * route (line + start circle + end square + mid-point arrows) directly over the
- * real orbs, plus a small colour key of the recognized board in the top-left so
- * the user can verify colours. On the main preview it re-draws the orb board.
+ * Floating route layer. On the overlay it is transparent and draws ONLY the smoothed
+ * white route (rounded curve + start circle + end square + mid-point arrows) over the
+ * real orbs. A faint 6x5 helper grid appears only in align mode. The recognised
+ * colour key lives in a separate small window at the screen's top-left corner.
  */
 class RouteBoardView : View {
     constructor(context: Context) : super(context)
@@ -24,14 +24,21 @@ class RouteBoardView : View {
     private var board: PDBoard? = null
     private var route: PDRoute = PDRoute()
 
-    /** When true (main preview) also paint the recognized orbs; overlay keeps false. */
+    /** Main preview re-draws the board; overlay keeps false. */
     var showOrbs = false
 
+    /** Show the faint 6x5 alignment grid (align mode only). */
+    var showGrid = false
+
     private val orbPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.argb(235, 255, 255, 255)
         strokeWidth = 4f
+        style = Paint.Style.STROKE
+    }
+    private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(55, 255, 255, 255)
+        strokeWidth = 1.5f
         style = Paint.Style.STROKE
     }
     private val startPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -72,29 +79,24 @@ class RouteBoardView : View {
                 canvas.drawCircle(cx, cy, orb / 2f, orbPaint)
             }
         } else if (!showOrbs) {
-            // Faint hairline frame so the user can see the capture box while aligning.
+            // Faint hairline frame around the capture box.
             canvas.drawRect(1f, 1f, width - 1f, height - 1f, framePaint)
 
-            // Colour key: tiny 6x5 swatch of the recognized board, top-left corner,
-            // so the user can compare recognized colours against the real orbs.
-            if (b != null) {
-                val sw = minOf(cellW, cellH) * 0.16f
-                val gap = sw * 0.25f
-                var sx = 10f
-                val sy = 10f
-                for (row in 0 until PDBoard.ROWS) {
-                    for (col in 0 until PDBoard.COLS) {
-                        fillPaint.color = orbColor(b.cells[PDBoard.index(row, col)])
-                        val x = sx + col * (sw + gap)
-                        val y = sy + row * (sw + gap)
-                        canvas.drawRect(x, y, x + sw, y + sw, fillPaint)
-                    }
+            // Alignment grid: faint 6x5 lines shown only in align mode so the user
+            // can line the box up with the orb centres.
+            if (showGrid) {
+                for (c in 1 until PDBoard.COLS) {
+                    val x = c * cellW
+                    canvas.drawLine(x, 0f, x, height.toFloat(), gridPaint)
+                }
+                for (r in 1 until PDBoard.ROWS) {
+                    val y = r * cellH
+                    canvas.drawLine(0f, y, width.toFloat(), y, gridPaint)
                 }
             }
         }
 
-        // Route polyline with mid-point direction arrows; start = hollow circle,
-        // end = square. Coordinates map straight onto the 6x5 grid filling this view.
+        // Smoothed rounded-curve route; start = hollow circle, end = square.
         val path = route.path
         if (path.size >= 2) {
             fun center(i: Int): FloatArray {
@@ -102,13 +104,24 @@ class RouteBoardView : View {
                 val cy = (PDBoard.rowOf(i) + 0.5f) * cellH
                 return floatArrayOf(cx, cy)
             }
-            val arrowHead = Path()
-            for (k in 1 until path.size) {
-                val a = center(path[k - 1])
-                val c = center(path[k])
-                canvas.drawLine(a[0], a[1], c[0], c[1], linePaint)
+            val pts = path.map { center(it) }
 
-                // Small arrowhead at the segment midpoint, pointing a -> c.
+            // Rounded curve: connect mid-points with quadratic beziers through each node.
+            val curve = Path()
+            curve.moveTo(pts[0][0], pts[0][1])
+            for (i in 1 until pts.size - 1) {
+                val mx = (pts[i][0] + pts[i + 1][0]) / 2
+                val my = (pts[i][1] + pts[i + 1][1]) / 2
+                curve.quadTo(pts[i][0], pts[i][1], mx, my)
+            }
+            curve.lineTo(pts.last()[0], pts.last()[1])
+            canvas.drawPath(curve, linePaint)
+
+            // Mid-point direction arrows along each original segment.
+            val arrowHead = Path()
+            for (k in 1 until pts.size) {
+                val a = pts[k - 1]
+                val c = pts[k]
                 val mx = (a[0] + c[0]) / 2
                 val my = (a[1] + c[1]) / 2
                 val dx = c[0] - a[0]
@@ -129,10 +142,10 @@ class RouteBoardView : View {
                 }
             }
             // Start: hollow circle.
-            val start = center(path[0])
+            val start = pts[0]
             canvas.drawCircle(start[0], start[1], orb / 2f, startPaint)
-            // End: filled square so the finish cell is obvious.
-            val end = center(path.last())
+            // End: filled square.
+            val end = pts.last()
             val hs = orb * 0.26f
             canvas.drawRect(end[0] - hs, end[1] - hs, end[0] + hs, end[1] + hs, startPaint)
 
