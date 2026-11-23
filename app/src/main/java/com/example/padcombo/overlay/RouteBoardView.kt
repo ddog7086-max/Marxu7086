@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PathMeasure
 import android.util.AttributeSet
 import android.view.View
 import com.example.padcombo.core.Orb
@@ -103,25 +104,60 @@ class RouteBoardView : View {
             val pts = path.map { center(it) }
             val cell = minOf(cellW, cellH)
 
-            // Draw the route segment by segment. Adjacent segments alternate
-            // high-contrast colours (white / yellow / cyan) over a dark underlay,
-            // so where the route loops back and overlaps itself each strand stays
-            // distinguishable, like intersecting road lanes.
+            // Smooth quadratic-bezier curve through the nodes: flowing curved
+            // bends, no right-angle grid corners.
+            val curve = Path()
+            curve.moveTo(pts[0][0], pts[0][1])
+            for (i in 1 until pts.size - 1) {
+                val mx = (pts[i][0] + pts[i + 1][0]) / 2f
+                val my = (pts[i][1] + pts[i + 1][1]) / 2f
+                curve.quadTo(pts[i][0], pts[i][1], mx, my)
+            }
+            curve.lineTo(pts.last()[0], pts.last()[1])
+
+            // Stroke the smoothed curve densely in tiny sub-segments so it keeps
+            // its flowing bend, while colour continuously gradients through
+            // white -> yellow -> cyan -> white. The phase repeats every ~1.6
+            // cells, so when the route loops back over the same spot the
+            // overlapping strand shows a different colour and stays readable.
             val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 strokeWidth = 13f
                 strokeCap = Paint.Cap.ROUND
                 style = Paint.Style.STROKE
                 color = Color.argb((a * 0.65f).toInt(), 0, 0, 0)
             }
-            val segColors = intArrayOf(
-                Color.argb(a, 255, 255, 255),
-                Color.argb(a, 255, 224, 54),
-                Color.argb(a, 90, 220, 255),
+            val anchors = arrayOf(
+                intArrayOf(255, 255, 255),
+                intArrayOf(255, 224, 54),
+                intArrayOf(90, 220, 255),
+                intArrayOf(255, 255, 255),
             )
-            for (i in 0 until pts.size - 1) {
-                linePaint.color = segColors[i % segColors.size]
-                canvas.drawLine(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], basePaint)
-                canvas.drawLine(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], linePaint)
+            fun grad(f: Float): Int {
+                val seg = (f * 3f).toInt().coerceIn(0, 2)
+                val g = (f * 3f - seg).coerceIn(0f, 1f)
+                val c0 = anchors[seg]
+                val c1 = anchors[seg + 1]
+                val r = (c0[0] + (c1[0] - c0[0]) * g).toInt()
+                val gg = (c0[1] + (c1[1] - c0[1]) * g).toInt()
+                val bb = (c0[2] + (c1[2] - c0[2]) * g).toInt()
+                return Color.argb(a, r, gg, bb)
+            }
+
+            val pm = PathMeasure(curve, false)
+            val total = pm.length
+            val n = (total / 6f).toInt().coerceAtLeast(1)
+            val last = FloatArray(2)
+            val pos = FloatArray(2)
+            pm.getPosTan(0f, last, null)
+            for (k in 1..n) {
+                val d = total * k / n
+                pm.getPosTan(d, pos, null)
+                val phase = (d / (cell * 1.6f)) % 1f
+                linePaint.color = grad(phase)
+                canvas.drawLine(last[0], last[1], pos[0], pos[1], basePaint)
+                canvas.drawLine(last[0], last[1], pos[0], pos[1], linePaint)
+                last[0] = pos[0]
+                last[1] = pos[1]
             }
 
             // Start: a small solid white filled circle.
