@@ -102,42 +102,30 @@ class RouteBoardView : View {
             }
             val cell = minOf(cellW, cellH)
 
-            // EDGE-level parallel lanes: when the route traverses the same edge a
-            // second/third time, shift that whole edge onto a parallel lane beside
-            // it instead of stacking on the same line. Horizontal repeats run in
-            // parallel rows (offset vertically); vertical repeats run in parallel
-            // columns (offset horizontally). Purely visual; drag/clear unchanged.
-            val edgeLane = IntArray(path.size)
-            val seenEdges = HashMap<String, Int>()
-            for (i in 1 until path.size) {
-                val u = path[i - 1]; val v = path[i]
-                val key = if (u < v) "$u-$v" else "$v-$u"
-                val lane = seenEdges[key] ?: 0
-                edgeLane[i] = lane
-                seenEdges[key] = lane + 1
-            }
+            // Alternating parallel lanes: every edge steps onto the opposite side of
+            // the track (even edges +, odd edges -) so consecutive segments run in
+            // two separated lanes instead of stacking on the same line. Purely
+            // visual; the solved drag path and clear count are unchanged.
             fun laneOffset(i: Int): FloatArray {
                 val u = center(path[i - 1]); val v = center(path[i])
-                val lane = edgeLane[i]
-                val side = if (lane % 2 == 0) 1f else -1f
-                val mag = ((lane + 1) / 2) * cell * 0.16f * side
+                val side = if (i % 2 == 0) 1f else -1f
+                val mag = cell * 0.18f * side
                 return if (Math.abs(v[0] - u[0]) > Math.abs(v[1] - u[1])) {
                     floatArrayOf(0f, mag)   // horizontal edge: lane off vertically
                 } else {
                     floatArrayOf(mag, 0f)   // vertical edge: lane off horizontally
                 }
             }
-            // Each vertex averages its incoming and outgoing lane offset so the
-            // polyline stays continuous through the turn.
+            // Each vertex sits on its outgoing edge's lane so consecutive edges
+            // stay in two separated parallel channels through the turn.
             val rawPts = ArrayList<FloatArray>()
             for (i in path.indices) {
                 val c = center(path[i])
-                val offIn = if (i >= 1) laneOffset(i) else floatArrayOf(0f, 0f)
                 val offOut = if (i < path.size - 1) laneOffset(i + 1) else floatArrayOf(0f, 0f)
                 rawPts.add(
                     floatArrayOf(
-                        c[0] + (offIn[0] + offOut[0]) / 2f,
-                        c[1] + (offIn[1] + offOut[1]) / 2f,
+                        c[0] + offOut[0],
+                        c[1] + offOut[1],
                     )
                 )
             }
