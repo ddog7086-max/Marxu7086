@@ -133,17 +133,22 @@ class RouteBoardView : View {
             }
             curve.lineTo(pts.last()[0], pts.last()[1])
 
-            // Pure solid white track over a slightly thicker black underlay so it
-            // stays readable on any orb and strands show a dark gap on overlap.
-            val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                strokeWidth = 13f
+            // Reference-guide grey pipe: a dark-grey outer stroke with a thin
+            // light-grey core, proportions & colors sampled from the reference.
+            val outerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                strokeWidth = 10f
                 strokeCap = Paint.Cap.ROUND
                 style = Paint.Style.STROKE
-                color = Color.argb((a * 0.7f).toInt(), 0, 0, 0)
+                color = Color.argb((a * 0.95f).toInt(), 92, 90, 90)
             }
-            linePaint.color = Color.argb(a, 255, 255, 255)
-            canvas.drawPath(curve, basePaint)
-            canvas.drawPath(curve, linePaint)
+            val innerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                strokeWidth = 4.5f
+                strokeCap = Paint.Cap.ROUND
+                style = Paint.Style.STROKE
+                color = Color.argb(a, 186, 183, 179)
+            }
+            canvas.drawPath(curve, outerPaint)
+            canvas.drawPath(curve, innerPaint)
 
             // Start: a small solid white filled circle.
             val start = pts[0]
