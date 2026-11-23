@@ -5,7 +5,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
-import android.graphics.PathMeasure
 import android.util.AttributeSet
 import android.view.View
 import com.example.padcombo.core.Orb
@@ -115,50 +114,18 @@ class RouteBoardView : View {
             }
             curve.lineTo(pts.last()[0], pts.last()[1])
 
-            // Stroke the smoothed curve densely in tiny sub-segments so it keeps
-            // its flowing bend, while colour continuously gradients through
-            // white -> yellow -> cyan -> white. The phase repeats every ~1.6
-            // cells, so when the route loops back over the same spot the
-            // overlapping strand shows a different colour and stays readable.
+            // Pure solid white smooth curve. A slightly thicker black underlay
+            // is drawn first so the white line stays readable on any orb and the
+            // two strands show a dark gap where they overlap.
             val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 strokeWidth = 13f
                 strokeCap = Paint.Cap.ROUND
                 style = Paint.Style.STROKE
-                color = Color.argb((a * 0.65f).toInt(), 0, 0, 0)
+                color = Color.argb((a * 0.7f).toInt(), 0, 0, 0)
             }
-            val anchors = arrayOf(
-                intArrayOf(255, 255, 255),
-                intArrayOf(255, 224, 54),
-                intArrayOf(90, 220, 255),
-                intArrayOf(255, 255, 255),
-            )
-            fun grad(f: Float): Int {
-                val seg = (f * 3f).toInt().coerceIn(0, 2)
-                val g = (f * 3f - seg).coerceIn(0f, 1f)
-                val c0 = anchors[seg]
-                val c1 = anchors[seg + 1]
-                val r = (c0[0] + (c1[0] - c0[0]) * g).toInt()
-                val gg = (c0[1] + (c1[1] - c0[1]) * g).toInt()
-                val bb = (c0[2] + (c1[2] - c0[2]) * g).toInt()
-                return Color.argb(a, r, gg, bb)
-            }
-
-            val pm = PathMeasure(curve, false)
-            val total = pm.length
-            val n = (total / 6f).toInt().coerceAtLeast(1)
-            val last = FloatArray(2)
-            val pos = FloatArray(2)
-            pm.getPosTan(0f, last, null)
-            for (k in 1..n) {
-                val d = total * k / n
-                pm.getPosTan(d, pos, null)
-                val phase = (d / (cell * 1.6f)) % 1f
-                linePaint.color = grad(phase)
-                canvas.drawLine(last[0], last[1], pos[0], pos[1], basePaint)
-                canvas.drawLine(last[0], last[1], pos[0], pos[1], linePaint)
-                last[0] = pos[0]
-                last[1] = pos[1]
-            }
+            linePaint.color = Color.argb(a, 255, 255, 255)
+            canvas.drawPath(curve, basePaint)
+            canvas.drawPath(curve, linePaint)
 
             // Start: a small solid white filled circle.
             val start = pts[0]
