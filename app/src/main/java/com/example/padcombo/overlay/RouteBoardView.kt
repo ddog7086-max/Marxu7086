@@ -129,12 +129,12 @@ class RouteBoardView : View {
             }
             // Each vertex averages its incoming and outgoing lane offset so the
             // polyline stays continuous through the turn.
-            val pts = ArrayList<FloatArray>()
+            val rawPts = ArrayList<FloatArray>()
             for (i in path.indices) {
                 val c = center(path[i])
                 val offIn = if (i >= 1) laneOffset(i) else floatArrayOf(0f, 0f)
                 val offOut = if (i < path.size - 1) laneOffset(i + 1) else floatArrayOf(0f, 0f)
-                pts.add(
+                rawPts.add(
                     floatArrayOf(
                         c[0] + (offIn[0] + offOut[0]) / 2f,
                         c[1] + (offIn[1] + offOut[1]) / 2f,
@@ -143,18 +143,16 @@ class RouteBoardView : View {
             }
 
             // Orthogonalise fallback: split any residual diagonal into H-then-V.
-            val clean = ArrayList<FloatArray>()
-            clean.add(pts[0])
-            for (i in 1 until pts.size) {
-                val p = clean.last()
-                val c = pts[i]
+            val pts = ArrayList<FloatArray>()
+            pts.add(rawPts[0])
+            for (i in 1 until rawPts.size) {
+                val p = pts.last()
+                val c = rawPts[i]
                 if (Math.abs(c[0] - p[0]) > 1f && Math.abs(c[1] - p[1]) > 1f) {
-                    clean.add(floatArrayOf(c[0], p[1]))
+                    pts.add(floatArrayOf(c[0], p[1]))
                 }
-                clean.add(c)
+                pts.add(c)
             }
-            @Suppress("UNUSED_CHANGED_VALUE")
-            val pts = clean
 
             // LOCKED style: rectilinear / Manhattan track with a LARGE rounded
             // fillet so each 90-degree turn sweeps through a near-semicircle
