@@ -100,7 +100,29 @@ class RouteBoardView : View {
                 val cy = oy + (PDBoard.rowOf(i) + 0.5f) * cellH
                 return floatArrayOf(cx, cy)
             }
-            val pts = path.map { center(it) }
+            // When the route visits the same cell a second (third...) time, shift
+            // that visit off-centre along the track's normal so the revisit runs
+            // in a parallel lane beside the orb instead of stacking on top of it.
+            // Only genuine crossings still intersect. Purely visual; the solved
+            // drag path and clear count are unchanged.
+            val seen = HashMap<Int, Int>()
+            val pts = path.mapIndexed { i, idx ->
+                val c = center(idx)
+                val k = (seen[idx] ?: 0) + 1
+                seen[idx] = k
+                if (k >= 2 && i > 0 && i < path.size - 1) {
+                    val a = center(path[i - 1])
+                    val b = center(path[i + 1])
+                    var dx = b[0] - a[0]
+                    var dy = b[1] - a[1]
+                    val len = Math.hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                    if (len > 1f) { dx /= len; dy /= len }
+                    val nx = -dy; val ny = dx
+                    val s = if (k % 2 == 0) 1f else -1f
+                    val off = cell * 0.16f * s
+                    floatArrayOf(c[0] + nx * off, c[1] + ny * off)
+                } else c
+            }
             val cell = minOf(cellW, cellH)
 
             // LOCKED style (per user request): rectilinear / Manhattan track
