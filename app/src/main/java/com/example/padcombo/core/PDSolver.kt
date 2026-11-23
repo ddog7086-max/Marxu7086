@@ -161,6 +161,9 @@ object PDSolver {
                 }
 
                 if (candidate.size < 2) return@repeat
+                // Hard self-avoiding constraint: reject any candidate that revisits
+                // a cell (it would form a loop-back ring or a knot).
+                if (hasDuplicate(candidate)) return@repeat
                 val (score, combos) = evaluate(board, candidate)
                 val delta = score - currentScore
                 if (delta >= 0 || rng.nextUnit() < exp(delta / max(temperature, 1e-6))) {
@@ -226,23 +229,33 @@ object PDSolver {
         rng: SplitMix64,
         excluded: Set<Int> = emptySet(),
     ): List<Int> {
-        // Re-visiting cells is allowed: the route may loop back over a cell to drag
-        // more orbs into a clear. Only immediate back-tracking (the previous cell)
-        // is avoided to keep the walk sensible.
+        // Self-avoiding walk: every cell is visited at most once, so the route can
+        // never loop back into a ring or tie a knot on an already-used cell.
         val path = mutableListOf(start)
+        val visited = HashSet<Int>()
+        visited.add(start)
         var previous = -1
         var last = start
         val target = minOf(length, maxLen)
 
         while (path.size < target) {
-            val options = neighbourIndicesOf(last).filter { it != previous }
+            val options = neighbourIndicesOf(last)
+                .filter { it != previous && it !in visited && it !in excluded }
             if (options.isEmpty()) break
             val next = options[rng.nextInt(options.size)]
             path.add(next)
+            visited.add(next)
             previous = last
             last = next
         }
         return path
+    }
+
+    /** True if any cell appears more than once in the path. */
+    private fun hasDuplicate(path: List<Int>): Boolean {
+        val seen = HashSet<Int>(path.size)
+        for (x in path) if (!seen.add(x)) return true
+        return false
     }
 
     private fun neighbourIndicesOf(index: Int): List<Int> {
