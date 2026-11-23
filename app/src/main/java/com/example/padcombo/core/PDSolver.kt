@@ -194,7 +194,19 @@ object PDSolver {
             st.combos == 4 || st.combos == 8 -> 15.0
             else -> 0.0
         }
-        val score = st.cleared * 100.0 + st.combos * 10.0 + comboTarget + path.size * 0.15
+        // Count direction changes (turns). A small per-turn penalty prefers a
+        // plain, straight, non-zigzag route over one that shuttles left-right;
+        // it is tiny vs one extra clear (100 pts) so clears still dominate.
+        var turns = 0
+        for (i in 1 until path.size - 1) {
+            val d1r = PDBoard.rowOf(path[i]) - PDBoard.rowOf(path[i - 1])
+            val d1c = PDBoard.colOf(path[i]) - PDBoard.colOf(path[i - 1])
+            val d2r = PDBoard.rowOf(path[i + 1]) - PDBoard.rowOf(path[i])
+            val d2c = PDBoard.colOf(path[i + 1]) - PDBoard.colOf(path[i])
+            if (d1r != d2r || d1c != d2c) turns++
+        }
+        val score = st.cleared * 100.0 + st.combos * 10.0 + comboTarget +
+            path.size * 0.15 - turns * 1.0
         return Pair(score, st.combos)
     }
 
