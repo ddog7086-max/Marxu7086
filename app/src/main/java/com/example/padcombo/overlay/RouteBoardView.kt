@@ -114,14 +114,22 @@ class RouteBoardView : View {
                 if (k >= 2 && i > 0 && i < path.size - 1) {
                     val a = center(path[i - 1])
                     val b = center(path[i + 1])
-                    var dx = b[0] - a[0]
-                    var dy = b[1] - a[1]
-                    val len = Math.hypot(dx.toDouble(), dy.toDouble()).toFloat()
-                    if (len > 1f) { dx /= len; dy /= len }
-                    val nx = -dy; val ny = dx
-                    val s = if (k % 2 == 0) 1f else -1f
-                    val off = cell * 0.16f * s
-                    floatArrayOf(c[0] + nx * off, c[1] + ny * off)
+                    // Only offset a straight-through revisit (same direction in/out);
+                    // a turn cell stays on-centre. The shift is always axis-aligned:
+                    // a horizontal lane shifts vertically, a vertical lane shifts
+                    // horizontally, so the track can never lean diagonal.
+                    val d1x = c[0] - a[0]; val d1y = c[1] - a[1]
+                    val d2x = b[0] - c[0]; val d2y = b[1] - c[1]
+                    val straight = d1x * d2x + d1y * d2y > 0f
+                    if (straight) {
+                        val s = if (k % 2 == 0) 1f else -1f
+                        val off = cell * 0.16f * s
+                        if (Math.abs(d1x) > Math.abs(d1y)) {
+                            floatArrayOf(c[0], c[1] + off)
+                        } else {
+                            floatArrayOf(c[0] + off, c[1])
+                        }
+                    } else c
                 } else c
             }
 
