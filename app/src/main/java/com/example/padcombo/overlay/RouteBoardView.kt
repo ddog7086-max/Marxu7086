@@ -158,7 +158,6 @@ class RouteBoardView : View {
             // fillet so each 90-degree turn sweeps through a near-semicircle
             // instead of a sharp corner. Do not use free-form bezier.
             val curve = Path()
-            val corner = cell * 0.40f
             fun lerp(a: FloatArray, b: FloatArray, t: Float) = floatArrayOf(
                 a[0] + (b[0] - a[0]) * t,
                 a[1] + (b[1] - a[1]) * t,
@@ -169,15 +168,20 @@ class RouteBoardView : View {
                 val d1x = p1[0] - p0[0]; val d1y = p1[1] - p0[1]
                 val d2x = p2[0] - p1[0]; val d2y = p2[1] - p1[1]
                 val dot = d1x * d2x + d1y * d2y
-                // Only a true reversal (180°, dot<0) draws a sharp joint; a 90°
-                // turn (dot==0) must sweep through the rounded fillet.
+                // Only a true reversal (180°, dot<0) draws a sharp joint; every
+                // 90° turn sweeps through a fillet using half of each adjacent
+                // leg, i.e. a near-semicircle, never a right-angle.
                 if (dot < 0f) {
                     curve.lineTo(p1[0], p1[1])
                     continue
                 }
                 val l1 = Math.hypot(d1x.toDouble(), d1y.toDouble()).toFloat()
                 val l2 = Math.hypot(d2x.toDouble(), d2y.toDouble()).toFloat()
-                val rr = minOf(corner, l1 / 2f, l2 / 2f)
+                val rr = minOf(l1 / 2f, l2 / 2f)
+                if (rr < 1f) {
+                    curve.lineTo(p1[0], p1[1])
+                    continue
+                }
                 val a = lerp(p1, p0, rr / l1)
                 val b = lerp(p1, p2, rr / l2)
                 curve.lineTo(a[0], a[1])
@@ -185,13 +189,13 @@ class RouteBoardView : View {
             }
             curve.lineTo(pts.last()[0], pts.last()[1])
 
-            // Reference-guide grey pipe: dark-grey outer stroke; inner core fades
-            // white -> black linearly along the route from start to end.
+            // Dark near-black outer pipe (thicker) for clear contrast over bright
+            // orbs; inner core fades white -> black along the route start to end.
             val outerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                strokeWidth = 12f
+                strokeWidth = 14f
                 strokeCap = Paint.Cap.ROUND
                 style = Paint.Style.STROKE
-                color = Color.argb(a, 70, 68, 68)
+                color = Color.argb(a, 35, 33, 33)
             }
             val innerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 strokeWidth = 6f
@@ -207,13 +211,19 @@ class RouteBoardView : View {
             canvas.drawPath(curve, outerPaint)
             canvas.drawPath(curve, innerPaint)
 
-            // Start: a small solid white filled circle.
+            // Start: the white end of the line itself, a white filled head seated
+            // right on the first point so it reads as one piece with the route.
             val start = pts[0]
-            val dotR = cell * 0.09f
-            canvas.drawCircle(start[0], start[1], dotR, dotPaint)
+            val dotR = cell * 0.11f
+            val headPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.argb(a, 255, 255, 255)
+                style = Paint.Style.FILL
+            }
+            canvas.drawCircle(start[0], start[1], dotR, headPaint)
 
-            // End: a single solid white filled triangular arrowhead at the very
-            // last point (no mid arrows, no hollow rings anywhere).
+            // End: a solid BLACK arrowhead whose tip sits exactly on the last
+            // point, rooted into the line tail so it is one piece with the black
+            // end of the gradient (not a floating white triangle).
             val prev = pts[pts.size - 2]
             val end = pts.last()
             val dx = end[0] - prev[0]
@@ -224,13 +234,17 @@ class RouteBoardView : View {
                 val uy = dy / len
                 val px = -uy
                 val py = ux
-                val s = cell * 0.18f
+                val s = cell * 0.20f
                 val arrow = Path()
                 arrow.moveTo(end[0], end[1])
                 arrow.lineTo(end[0] - ux * s + px * s * 0.55f, end[1] - uy * s + py * s * 0.55f)
                 arrow.lineTo(end[0] - ux * s - px * s * 0.55f, end[1] - uy * s - py * s * 0.55f)
                 arrow.close()
-                canvas.drawPath(arrow, fillPaint)
+                val arrowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = Color.argb(a, 0, 0, 0)
+                    style = Paint.Style.FILL
+                }
+                canvas.drawPath(arrow, arrowPaint)
             }
 
             val td = resources.displayMetrics.density
