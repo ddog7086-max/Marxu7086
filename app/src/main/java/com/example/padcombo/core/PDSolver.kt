@@ -205,8 +205,17 @@ object PDSolver {
             val d2c = PDBoard.colOf(path[i + 1]) - PDBoard.colOf(path[i])
             if (d1r != d2r || d1c != d2c) turns++
         }
+        // Revisit penalty: every second-and-later pass over an already-visited cell
+        // forms a loop-back ring or a knot/crossing on the stem. Penalise it so the
+        // solver prefers a single non-repeating through-line instead of circling
+        // back. Still small vs one extra clear (100 pts).
+        val seen = HashSet<Int>()
+        var revisits = 0
+        for (idx in path) {
+            if (!seen.add(idx)) revisits++
+        }
         val score = st.cleared * 100.0 + st.combos * 10.0 + comboTarget +
-            path.size * 0.15 - turns * 1.0
+            path.size * 0.15 - turns * 1.0 - revisits * 1.5
         return Pair(score, st.combos)
     }
 
