@@ -103,16 +103,26 @@ class RouteBoardView : View {
             val pts = path.map { center(it) }
             val cell = minOf(cellW, cellH)
 
-            // Thin smooth solid white line through the path nodes.
-            val curve = Path()
-            curve.moveTo(pts[0][0], pts[0][1])
-            for (i in 1 until pts.size - 1) {
-                val mx = (pts[i][0] + pts[i + 1][0]) / 2
-                val my = (pts[i][1] + pts[i + 1][1]) / 2
-                curve.quadTo(pts[i][0], pts[i][1], mx, my)
+            // Draw the route segment by segment. Adjacent segments alternate
+            // high-contrast colours (white / yellow / cyan) over a dark underlay,
+            // so where the route loops back and overlaps itself each strand stays
+            // distinguishable, like intersecting road lanes.
+            val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                strokeWidth = 13f
+                strokeCap = Paint.Cap.ROUND
+                style = Paint.Style.STROKE
+                color = Color.argb((a * 0.65f).toInt(), 0, 0, 0)
             }
-            curve.lineTo(pts.last()[0], pts.last()[1])
-            canvas.drawPath(curve, linePaint)
+            val segColors = intArrayOf(
+                Color.argb(a, 255, 255, 255),
+                Color.argb(a, 255, 224, 54),
+                Color.argb(a, 90, 220, 255),
+            )
+            for (i in 0 until pts.size - 1) {
+                linePaint.color = segColors[i % segColors.size]
+                canvas.drawLine(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], basePaint)
+                canvas.drawLine(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], linePaint)
+            }
 
             // Start: a small solid white filled circle.
             val start = pts[0]
