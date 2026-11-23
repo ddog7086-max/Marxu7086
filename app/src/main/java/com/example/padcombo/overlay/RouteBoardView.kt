@@ -190,26 +190,43 @@ class RouteBoardView : View {
             curve.lineTo(pts.last()[0], pts.last()[1])
 
             // Dark near-black outer pipe (thicker) for clear contrast over bright
-            // orbs; inner core fades white -> black along the route start to end.
+            // orbs. Inner core fades white -> black UNIFORMLY by walked distance
+            // (arc-length proportion), so the whole route shades evenly instead of
+            // only the head being white and the tail all black.
             val outerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 strokeWidth = 14f
                 strokeCap = Paint.Cap.ROUND
                 style = Paint.Style.STROKE
                 color = Color.argb(a, 35, 33, 33)
             }
-            val innerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            canvas.drawPath(curve, outerPaint)
+
+            // Cumulative arc length so each segment's shade follows how far along
+            // the route it is (0 = white head, 1 = black tail, mid = even grey).
+            val segLen = FloatArray(pts.size - 1)
+            var total = 0f
+            for (j in 0 until pts.size - 1) {
+                val dx = pts[j + 1][0] - pts[j][0]
+                val dy = pts[j + 1][1] - pts[j][1]
+                segLen[j] = Math.hypot(dx.toDouble(), dy.toDouble()).toFloat()
+                total += segLen[j]
+            }
+            val innerSeg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 strokeWidth = 6f
                 strokeCap = Paint.Cap.ROUND
                 style = Paint.Style.STROKE
-                shader = android.graphics.LinearGradient(
-                    pts[0][0], pts[0][1], pts.last()[0], pts.last()[1],
-                    Color.argb(a, 255, 255, 255),
-                    Color.argb(a, 0, 0, 0),
-                    android.graphics.Shader.TileMode.CLAMP
-                )
             }
-            canvas.drawPath(curve, outerPaint)
-            canvas.drawPath(curve, innerPaint)
+            var acc = 0f
+            for (j in 0 until pts.size - 1) {
+                val t = if (total > 0f) (acc + segLen[j] / 2f) / total else 0f
+                val g = (255 * (1f - t)).toInt().coerceIn(0, 255)
+                innerSeg.color = Color.argb(a, g, g, g)
+                val sp = Path()
+                sp.moveTo(pts[j][0], pts[j][1])
+                sp.lineTo(pts[j + 1][0], pts[j + 1][1])
+                canvas.drawPath(sp, innerSeg)
+                acc += segLen[j]
+            }
 
             // Start: the white end of the line itself, a white filled head seated
             // right on the first point so it reads as one piece with the route.

@@ -161,9 +161,9 @@ object PDSolver {
                 }
 
                 if (candidate.size < 2) return@repeat
-                // Hard constraint: no immediate about-turn (A->B->A); detouring
-                // back after other cells is still allowed.
-                if (hasBacktrack(candidate)) return@repeat
+                // Reject tight short loops / knots (a cell revisited within a few
+                // steps); long detour revisits that help clear orbs are kept.
+                if (hasShortLoop(candidate)) return@repeat
                 val (score, combos) = evaluate(board, candidate)
                 val delta = score - currentScore
                 if (delta >= 0 || rng.nextUnit() < exp(delta / max(temperature, 1e-6))) {
@@ -239,10 +239,17 @@ object PDSolver {
         return path
     }
 
-    /** True if the path immediately doubles back: A -> B -> A. */
-    private fun hasBacktrack(path: List<Int>): Boolean {
-        for (i in 1 until path.size - 1) {
-            if (path[i + 1] == path[i - 1]) return true
+    /**
+     * True if a cell is revisited after only a short gap (a tight little loop /
+     * knot). Long detours that come back many steps later are allowed (they help
+     * clear orbs); only the short local loops are rejected.
+     */
+    private fun hasShortLoop(path: List<Int>, maxGap: Int = 4): Boolean {
+        val lastPos = HashMap<Int, Int>()
+        for (i in path.indices) {
+            val prev = lastPos[path[i]]
+            if (prev != null && i - prev <= maxGap) return true
+            lastPos[path[i]] = i
         }
         return false
     }
