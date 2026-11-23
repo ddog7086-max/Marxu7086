@@ -185,9 +185,10 @@ object PDSolver {
         val after = board.dragged(along = path)
         val st = after.resolveStats()
         // Board-clear dominates: maximise the number of orbs actually cleared;
-        // combo count only breaks ties between equally-cleared routes. Overlap is
-        // allowed, so there is no length penalty.
-        val score = st.cleared * 100.0 + st.combos * 10.0
+        // combo count breaks close ties. A tiny length preference only picks the
+        // shorter route when cleared AND combos are identical, so it removes
+        // redundant looping connection steps without ever sacrificing a clear.
+        val score = st.cleared * 100.0 + st.combos * 10.0 - path.size * 0.5
         return Pair(score, st.combos)
     }
 
