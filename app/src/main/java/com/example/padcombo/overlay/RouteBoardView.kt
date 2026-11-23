@@ -103,20 +103,38 @@ class RouteBoardView : View {
             val pts = path.map { center(it) }
             val cell = minOf(cellW, cellH)
 
-            // Smooth quadratic-bezier curve through the nodes: flowing curved
-            // bends, no right-angle grid corners.
+            // Rectilinear route (horizontal / vertical between cell centres) with
+            // rounded corners at each turn, matching the reference guide: a clean
+            // right-angle track instead of a free-form bezier curve.
             val curve = Path()
+            val corner = cell * 0.18f
+            fun lerp(a: FloatArray, b: FloatArray, t: Float) = floatArrayOf(
+                a[0] + (b[0] - a[0]) * t,
+                a[1] + (b[1] - a[1]) * t,
+            )
             curve.moveTo(pts[0][0], pts[0][1])
             for (i in 1 until pts.size - 1) {
-                val mx = (pts[i][0] + pts[i + 1][0]) / 2f
-                val my = (pts[i][1] + pts[i + 1][1]) / 2f
-                curve.quadTo(pts[i][0], pts[i][1], mx, my)
+                val p0 = pts[i - 1]; val p1 = pts[i]; val p2 = pts[i + 1]
+                val d1x = p1[0] - p0[0]; val d1y = p1[1] - p0[1]
+                val d2x = p2[0] - p1[0]; val d2y = p2[1] - p1[1]
+                val dot = d1x * d2x + d1y * d2y
+                if (dot <= 0f) {
+                    // Straight continuation or immediate back-track: plain line.
+                    curve.lineTo(p1[0], p1[1])
+                    continue
+                }
+                val l1 = Math.hypot(d1x.toDouble(), d1y.toDouble()).toFloat()
+                val l2 = Math.hypot(d2x.toDouble(), d2y.toDouble()).toFloat()
+                val rr = minOf(corner, l1 / 2f, l2 / 2f)
+                val a = lerp(p1, p0, rr / l1)
+                val b = lerp(p1, p2, rr / l2)
+                curve.lineTo(a[0], a[1])
+                curve.quadTo(p1[0], p1[1], b[0], b[1])
             }
             curve.lineTo(pts.last()[0], pts.last()[1])
 
-            // Pure solid white smooth curve. A slightly thicker black underlay
-            // is drawn first so the white line stays readable on any orb and the
-            // two strands show a dark gap where they overlap.
+            // Pure solid white track over a slightly thicker black underlay so it
+            // stays readable on any orb and strands show a dark gap on overlap.
             val basePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 strokeWidth = 13f
                 strokeCap = Paint.Cap.ROUND
