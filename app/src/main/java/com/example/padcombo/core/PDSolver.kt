@@ -122,12 +122,11 @@ object PDSolver {
                         }
                     }
                     roll < 0.80 -> {
-                        // Wiggle a single step: pick a neighbour not already on the
-                        // path so no cell is visited twice (no overlapping line).
+                        // Wiggle a single step to any neighbour; revisiting cells is
+                        // allowed now that overlap is permitted.
                         if (candidate.size < 2) return@repeat
                         val i = rng.nextInt(1, candidate.size)
-                        val used = candidate.toSet()
-                        val options = neighbourIndicesOf(candidate[i - 1]).filter { it !in used }
+                        val options = neighbourIndicesOf(candidate[i - 1])
                         if (options.isNotEmpty()) {
                             candidate = candidate.toMutableList().also {
                                 it[i] = options[rng.nextInt(options.size)]
@@ -139,20 +138,20 @@ object PDSolver {
                         }
                     }
                     roll < 0.90 && candidate.size >= 3 -> {
-                        // Swap two adjacent steps; keep the walk valid & non-repeating.
+                        // Swap two adjacent steps; keep the walk adjacent.
                         val i = rng.nextInt(1, candidate.size)
                         val q = candidate.toMutableList()
                         val t = q[i - 1]; q[i - 1] = q[i]; q[i] = t
                         val linksOk = (i - 1 == 0 || areAdjacent(q[i - 2], q[i - 1])) &&
                             (i == candidate.size - 1 || areAdjacent(q[i], q[i + 1]))
-                        if (linksOk && q.toSet().size == q.size) candidate = q
+                        if (linksOk) candidate = q
                     }
                     candidate.size >= 3 && candidate.size < maxLen -> {
                         // Insert one cell between two consecutive steps (a zigzag).
                         val i = rng.nextInt(1, candidate.size)
                         val a = candidate[i - 1]; val b = candidate[i]
                         val x = neighbourIndicesOf(a)
-                            .filter { it != b && areAdjacent(it, b) && it !in candidate }
+                            .filter { it != b && areAdjacent(it, b) }
                         if (x.isNotEmpty()) {
                             val q = candidate.toMutableList()
                             q.add(i, x[rng.nextInt(x.size)])
@@ -186,8 +185,9 @@ object PDSolver {
         val after = board.dragged(along = path)
         val st = after.resolveStats()
         // Board-clear dominates: maximise the number of orbs actually cleared;
-        // combo count only breaks ties between equally-cleared routes.
-        val score = st.cleared * 100.0 + st.combos * 10.0 - 0.05 * path.size
+        // combo count only breaks ties between equally-cleared routes. Overlap is
+        // allowed, so there is no length penalty.
+        val score = st.cleared * 100.0 + st.combos * 10.0
         return Pair(score, st.combos)
     }
 
@@ -198,21 +198,19 @@ object PDSolver {
         rng: SplitMix64,
         excluded: Set<Int> = emptySet(),
     ): List<Int> {
+        // Re-visiting cells is allowed: the route may loop back over a cell to drag
+        // more orbs into a clear. Only immediate back-tracking (the previous cell)
+        // is avoided to keep the walk sensible.
         val path = mutableListOf(start)
-        val visited = HashSet(excluded)
-        visited.add(start)
         var previous = -1
         var last = start
         val target = minOf(length, maxLen)
 
         while (path.size < target) {
-            // Never revisit a cell: a route that loops back over an already-visited
-            // cell draws overlapping segments the player cannot follow.
-            val options = neighbourIndicesOf(last).filter { it != previous && it !in visited }
+            val options = neighbourIndicesOf(last).filter { it != previous }
             if (options.isEmpty()) break
             val next = options[rng.nextInt(options.size)]
             path.add(next)
-            visited.add(next)
             previous = last
             last = next
         }
