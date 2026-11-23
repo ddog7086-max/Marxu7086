@@ -105,6 +105,7 @@ class RouteBoardView : View {
             // in a parallel lane beside the orb instead of stacking on top of it.
             // Only genuine crossings still intersect. Purely visual; the solved
             // drag path and clear count are unchanged.
+            val cell = minOf(cellW, cellH)
             val seen = HashMap<Int, Int>()
             val pts = path.mapIndexed { i, idx ->
                 val c = center(idx)
@@ -123,7 +124,6 @@ class RouteBoardView : View {
                     floatArrayOf(c[0] + nx * off, c[1] + ny * off)
                 } else c
             }
-            val cell = minOf(cellW, cellH)
 
             // LOCKED style (per user request): rectilinear / Manhattan track
             // (horizontal & vertical between cell centres) with rounded filleted
