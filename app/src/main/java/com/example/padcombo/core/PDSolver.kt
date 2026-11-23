@@ -161,9 +161,9 @@ object PDSolver {
                 }
 
                 if (candidate.size < 2) return@repeat
-                // Hard self-avoiding constraint: reject any candidate that revisits
-                // a cell (it would form a loop-back ring or a knot).
-                if (hasDuplicate(candidate)) return@repeat
+                // Hard constraint: no immediate about-turn (A->B->A); detouring
+                // back after other cells is still allowed.
+                if (hasBacktrack(candidate)) return@repeat
                 val (score, combos) = evaluate(board, candidate)
                 val delta = score - currentScore
                 if (delta >= 0 || rng.nextUnit() < exp(delta / max(temperature, 1e-6))) {
@@ -208,17 +208,8 @@ object PDSolver {
             val d2c = PDBoard.colOf(path[i + 1]) - PDBoard.colOf(path[i])
             if (d1r != d2r || d1c != d2c) turns++
         }
-        // Revisit penalty: every second-and-later pass over an already-visited cell
-        // forms a loop-back ring or a knot/crossing on the stem. Penalise it so the
-        // solver prefers a single non-repeating through-line instead of circling
-        // back. Still small vs one extra clear (100 pts).
-        val seen = HashSet<Int>()
-        var revisits = 0
-        for (idx in path) {
-            if (!seen.add(idx)) revisits++
-        }
         val score = st.cleared * 100.0 + st.combos * 10.0 + comboTarget +
-            path.size * 0.15 - turns * 1.0 - revisits * 1.5
+            path.size * 0.15 - turns * 1.0
         return Pair(score, st.combos)
     }
 
@@ -229,32 +220,30 @@ object PDSolver {
         rng: SplitMix64,
         excluded: Set<Int> = emptySet(),
     ): List<Int> {
-        // Self-avoiding walk: every cell is visited at most once, so the route can
-        // never loop back into a ring or tie a knot on an already-used cell.
+        // No immediate about-turn: the next cell may not be the one just left
+        // (A->B->A forbidden). Cells may still be revisited after a detour.
         val path = mutableListOf(start)
-        val visited = HashSet<Int>()
-        visited.add(start)
         var previous = -1
         var last = start
         val target = minOf(length, maxLen)
 
         while (path.size < target) {
             val options = neighbourIndicesOf(last)
-                .filter { it != previous && it !in visited && it !in excluded }
+                .filter { it != previous && it !in excluded }
             if (options.isEmpty()) break
             val next = options[rng.nextInt(options.size)]
             path.add(next)
-            visited.add(next)
             previous = last
             last = next
         }
         return path
     }
 
-    /** True if any cell appears more than once in the path. */
-    private fun hasDuplicate(path: List<Int>): Boolean {
-        val seen = HashSet<Int>(path.size)
-        for (x in path) if (!seen.add(x)) return true
+    /** True if the path immediately doubles back: A -> B -> A. */
+    private fun hasBacktrack(path: List<Int>): Boolean {
+        for (i in 1 until path.size - 1) {
+            if (path[i + 1] == path[i - 1]) return true
+        }
         return false
     }
 
