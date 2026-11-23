@@ -188,11 +188,9 @@ class PadService : Service() {
         colorKey?.setBoard(board)
 
         solverExecutor.execute {
-            val sp = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            // Complexity 0..20 -> route length cap up to 30 cells and search effort.
-            val level = sp.getInt(KEY_COMPLEX, 8)
-            val maxLen = (12 + level).coerceAtMost(30)
-            val route = PDSolver.solve(board, maxLen = maxLen, complexity = level)
+            // Complexity slider removed: search effort and route length are fixed so
+            // the solver always targets a stable 5..7-combo result.
+            val route = PDSolver.solve(board, maxLen = 22, complexity = 7)
             mainHandler.post {
                 overlay?.show(board, route)
                 listener?.onBoard(board, route)
@@ -300,21 +298,6 @@ class PadService : Service() {
         }
         col.addView(alphaBar, matchW)
 
-        // Complexity slider: 0..20 maps to a route length cap of 10..30 cells.
-        // Higher = longer, more elaborate route that chains more combos.
-        col.addView(label("复杂度（往右路线更长）"), matchW)
-        val complexBar = android.widget.SeekBar(this).apply {
-            max = 20
-            progress = sp.getInt(KEY_COMPLEX, 8)
-            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: android.widget.SeekBar?, p: Int, fromUser: Boolean) {
-                    sp.edit().putInt(KEY_COMPLEX, p).apply()
-                }
-                override fun onStartTrackingTouch(s: android.widget.SeekBar?) {}
-                override fun onStopTrackingTouch(s: android.widget.SeekBar?) {}
-            })
-        }
-        col.addView(complexBar, matchW)
         bar.addView(col, FrameLayout.LayoutParams(
             panelW,
             FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -440,6 +423,5 @@ class PadService : Service() {
 
         const val PREFS = "padcombo_calibration"
         const val KEY_ALPHA = "route_alpha"
-        const val KEY_COMPLEX = "complexity"
     }
 }

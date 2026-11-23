@@ -184,11 +184,17 @@ object PDSolver {
     fun evaluate(board: PDBoard, path: List<Int>): Pair<Double, Int> {
         val after = board.dragged(along = path)
         val st = after.resolveStats()
-        // Board-clear dominates: maximise the number of orbs actually cleared;
-        // combo count breaks ties. A small length reward only prefers a longer,
-        // continuous sweeping route (like the reference) when clears are equal;
-        // it never outweighs one extra clear (100 pts vs ~4.5 for 30 cells).
-        val score = st.cleared * 100.0 + st.combos * 10.0 + path.size * 0.15
+        // Board-clear dominates: maximise the number of orbs actually cleared
+        // (one extra clear = 100 pts, always above the smaller bonuses). On an
+        // equal clear count, prefer a route landing in the locked 5..7-combo
+        // window; 4 or 8 combos get a small consolation, anything else none.
+        // A small length reward keeps the route continuous when clears tie.
+        val comboTarget = when {
+            st.combos in 5..7 -> 40.0
+            st.combos == 4 || st.combos == 8 -> 15.0
+            else -> 0.0
+        }
+        val score = st.cleared * 100.0 + st.combos * 10.0 + comboTarget + path.size * 0.15
         return Pair(score, st.combos)
     }
 
