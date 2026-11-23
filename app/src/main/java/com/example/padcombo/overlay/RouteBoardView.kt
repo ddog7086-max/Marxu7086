@@ -134,18 +134,18 @@ class RouteBoardView : View {
             curve.lineTo(pts.last()[0], pts.last()[1])
 
             // Reference-guide grey pipe: a dark-grey outer stroke with a thin
-            // light-grey core, proportions & colors sampled from the reference.
+            // light core, made darker/thicker so it reads over bright orbs.
             val outerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                strokeWidth = 10f
+                strokeWidth = 12f
                 strokeCap = Paint.Cap.ROUND
                 style = Paint.Style.STROKE
-                color = Color.argb((a * 0.95f).toInt(), 92, 90, 90)
+                color = Color.argb(a, 70, 68, 68)
             }
             val innerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                strokeWidth = 4.5f
+                strokeWidth = 6f
                 strokeCap = Paint.Cap.ROUND
                 style = Paint.Style.STROKE
-                color = Color.argb(a, 186, 183, 179)
+                color = Color.argb(a, 225, 223, 220)
             }
             canvas.drawPath(curve, outerPaint)
             canvas.drawPath(curve, innerPaint)

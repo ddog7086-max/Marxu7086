@@ -185,11 +185,9 @@ object PDSolver {
         val after = board.dragged(along = path)
         val st = after.resolveStats()
         // Board-clear dominates: maximise the number of orbs actually cleared;
-        // combo count breaks close ties. A mild length preference steers away
-        // from side-probe-and-fold-back detours; because one extra clear is 100
-        // points while even a 30-cell route only costs ~36, it never sacrifices
-        // a clear to be shorter.
-        val score = st.cleared * 100.0 + st.combos * 10.0 - path.size * 1.2
+        // combo count only breaks ties. No length penalty: it steered the SA
+        // toward short weak routes and dropped the clear count.
+        val score = st.cleared * 100.0 + st.combos * 10.0
         return Pair(score, st.combos)
     }
 
