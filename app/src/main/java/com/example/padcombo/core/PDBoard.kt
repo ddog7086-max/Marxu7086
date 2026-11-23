@@ -132,13 +132,22 @@ class PDBoard(val cells: IntArray) {
     }
 
     /** Clears matches, drops the remainder, repeats. Returns the combo count. */
-    fun resolveCombos(): Int {
+    fun resolveCombos(): Int = resolveStats().combos
+
+    /** Combo count plus the total number of orbs actually cleared (board-clear target). */
+    data class ResolveResult(val combos: Int, val cleared: Int)
+
+    fun resolveStats(): ResolveResult {
         var combos = 0
+        var cleared = 0
         repeat(64) {
             val matched = runs()
-            if (matched.isEmpty()) return combos
+            if (matched.isEmpty()) return ResolveResult(combos, cleared)
             combos += matched.size
-            for (run in matched) for (i in run) cells[i] = Orb.EMPTY
+            for (run in matched) {
+                cleared += run.size
+                for (i in run) cells[i] = Orb.EMPTY
+            }
             for (col in 0 until COLS) {
                 val survivors = ArrayList<Int>(ROWS)
                 for (row in 0 until ROWS) {
@@ -150,7 +159,7 @@ class PDBoard(val cells: IntArray) {
                 }
             }
         }
-        return combos
+        return ResolveResult(combos, cleared)
     }
 
     /** Cheap heuristic: how many cells already sit in a pair. */

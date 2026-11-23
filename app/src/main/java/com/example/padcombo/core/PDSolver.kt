@@ -26,6 +26,7 @@ class SplitMix64(seed: ULong = 0x9E3779B97F4A7C15u) {
 data class PDRoute(
     val path: List<Int> = emptyList(),
     val combos: Int = 0,
+    val cleared: Int = 0,
 )
 
 /** Simulated-annealing search over complete drag paths. */
@@ -33,7 +34,7 @@ object PDSolver {
     private val NEIGHBOURS = listOf(-1 to 0, 1 to 0, 0 to -1, 0 to 1)
 
     /** Independent SA runs per board; the best result is kept. */
-    private const val MULTI_RUNS = 4
+    private const val MULTI_RUNS = 6
 
     fun solve(
         board: PDBoard,
@@ -43,11 +44,11 @@ object PDSolver {
         restarts: Int = 0,
         seed: ULong = 0x123456789ABCDEF0uL,
     ): PDRoute {
-        // Complexity 0..20 scales search effort (more restarts / budget) while a
-        // fixed cap keeps the single-frame analysis fast on a phone.
+        // Complexity 0..20 scales search effort (more restarts / budget); high
+        // settings run a deeper search to chase a full board clear.
         val level = complexity.coerceIn(0, 20)
-        val effRestarts = if (restarts > 0) restarts else 8 + level
-        val effBudget = if (budgetPerRestart > 0) budgetPerRestart else 1500 + level * 120
+        val effRestarts = if (restarts > 0) restarts else 10 + level
+        val effBudget = if (budgetPerRestart > 0) budgetPerRestart else 2200 + level * 140
 
         var bestPath: List<Int> = emptyList()
         var bestScore = Double.NEGATIVE_INFINITY
@@ -65,16 +66,10 @@ object PDSolver {
                 bestCombos = combos
             }
         }
-        // Re-evaluate the kept path independently so the displayed combo count
-        // always matches the route actually drawn.
-        val (finalScore, finalCombos) = evaluate(board, bestPath)
-        if (finalScore > bestScore) {
-            bestScore = finalScore
-            bestCombos = finalCombos
-        } else {
-            bestCombos = finalCombos
-        }
-        return PDRoute(bestPath, bestCombos)
+        // Re-evaluate the kept path independently so the displayed counts always
+        // match the route actually drawn.
+        val st = board.dragged(along = bestPath).resolveStats()
+        return PDRoute(bestPath, st.combos, st.cleared)
     }
 
     private fun saOnce(
@@ -189,10 +184,11 @@ object PDSolver {
 
     fun evaluate(board: PDBoard, path: List<Int>): Pair<Double, Int> {
         val after = board.dragged(along = path)
-        val combos = after.resolveCombos()
-        // Combo count dominates; a mild length penalty only breaks ties, so longer,
-        // more elaborate paths that chain more clears are preferred.
-        return Pair(combos * 10.0 - 0.12 * path.size, combos)
+        val st = after.resolveStats()
+        // Board-clear dominates: maximise the number of orbs actually cleared;
+        // combo count only breaks ties between equally-cleared routes.
+        val score = st.cleared * 100.0 + st.combos * 10.0 - 0.05 * path.size
+        return Pair(score, st.combos)
     }
 
     private fun randomPathFrom(

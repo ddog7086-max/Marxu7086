@@ -141,7 +141,7 @@ class RouteBoardView : View {
             }
 
             val td = resources.displayMetrics.density
-            val label = "${route.combos} combo · ${path.size} 格"
+            val label = "消 ${route.cleared}/30 颗 · ${route.combos} combo · ${path.size} 格"
             val bx = 16f * td
             val by = 150f * td
             val tw = textPaint.measureText(label)
