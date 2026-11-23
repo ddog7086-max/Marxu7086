@@ -100,52 +100,61 @@ class RouteBoardView : View {
                 val cy = oy + (PDBoard.rowOf(i) + 0.5f) * cellH
                 return floatArrayOf(cx, cy)
             }
-            // When the route visits the same cell a second (third...) time, shift
-            // that visit off-centre along the track's normal so the revisit runs
-            // in a parallel lane beside the orb instead of stacking on top of it.
-            // Only genuine crossings still intersect. Purely visual; the solved
-            // drag path and clear count are unchanged.
             val cell = minOf(cellW, cellH)
-            val seen = HashMap<Int, Int>()
-            val offsetPts = path.mapIndexed { i, idx ->
-                val c = center(idx)
-                val k = (seen[idx] ?: 0) + 1
-                seen[idx] = k
-                if (k >= 2 && i > 0 && i < path.size - 1) {
-                    val a = center(path[i - 1])
-                    val b = center(path[i + 1])
-                    // Only offset a straight-through revisit (same direction in/out);
-                    // a turn cell stays on-centre. The shift is always axis-aligned:
-                    // a horizontal lane shifts vertically, a vertical lane shifts
-                    // horizontally, so the track can never lean diagonal.
-                    val d1x = c[0] - a[0]; val d1y = c[1] - a[1]
-                    val d2x = b[0] - c[0]; val d2y = b[1] - c[1]
-                    val straight = d1x * d2x + d1y * d2y > 0f
-                    if (straight) {
-                        val s = if (k % 2 == 0) 1f else -1f
-                        val off = cell * 0.16f * s
-                        if (Math.abs(d1x) > Math.abs(d1y)) {
-                            floatArrayOf(c[0], c[1] + off)
-                        } else {
-                            floatArrayOf(c[0] + off, c[1])
-                        }
-                    } else c
-                } else c
+
+            // EDGE-level parallel lanes: when the route traverses the same edge a
+            // second/third time, shift that whole edge onto a parallel lane beside
+            // it instead of stacking on the same line. Horizontal repeats run in
+            // parallel rows (offset vertically); vertical repeats run in parallel
+            // columns (offset horizontally). Purely visual; drag/clear unchanged.
+            val edgeLane = IntArray(path.size)
+            val seenEdges = HashMap<String, Int>()
+            for (i in 1 until path.size) {
+                val u = path[i - 1]; val v = path[i]
+                val key = if (u < v) "$u-$v" else "$v-$u"
+                val lane = seenEdges[key] ?: 0
+                edgeLane[i] = lane
+                seenEdges[key] = lane + 1
+            }
+            fun laneOffset(i: Int): FloatArray {
+                val u = center(path[i - 1]); val v = center(path[i])
+                val lane = edgeLane[i]
+                val side = if (lane % 2 == 0) 1f else -1f
+                val mag = ((lane + 1) / 2) * cell * 0.16f * side
+                return if (Math.abs(v[0] - u[0]) > Math.abs(v[1] - u[1])) {
+                    floatArrayOf(0f, mag)   // horizontal edge: lane off vertically
+                } else {
+                    floatArrayOf(mag, 0f)   // vertical edge: lane off horizontally
+                }
+            }
+            // Each vertex averages its incoming and outgoing lane offset so the
+            // polyline stays continuous through the turn.
+            val pts = ArrayList<FloatArray>()
+            for (i in path.indices) {
+                val c = center(path[i])
+                val offIn = if (i >= 1) laneOffset(i) else floatArrayOf(0f, 0f)
+                val offOut = if (i < path.size - 1) laneOffset(i + 1) else floatArrayOf(0f, 0f)
+                pts.add(
+                    floatArrayOf(
+                        c[0] + (offIn[0] + offOut[0]) / 2f,
+                        c[1] + (offIn[1] + offOut[1]) / 2f,
+                    )
+                )
             }
 
-            // Orthogonalise: every move must be purely horizontal or vertical.
-            // Split any diagonal jump into an H-then-V elbow so the track runs
-            // parallel to the grid (no diagonal slash, no sharp Y-junction).
-            val pts = ArrayList<FloatArray>()
-            pts.add(offsetPts[0])
-            for (i in 1 until offsetPts.size) {
-                val p = pts.last()
-                val c = offsetPts[i]
+            // Orthogonalise fallback: split any residual diagonal into H-then-V.
+            val clean = ArrayList<FloatArray>()
+            clean.add(pts[0])
+            for (i in 1 until pts.size) {
+                val p = clean.last()
+                val c = pts[i]
                 if (Math.abs(c[0] - p[0]) > 1f && Math.abs(c[1] - p[1]) > 1f) {
-                    pts.add(floatArrayOf(c[0], p[1]))
+                    clean.add(floatArrayOf(c[0], p[1]))
                 }
-                pts.add(c)
+                clean.add(c)
             }
+            @Suppress("UNUSED_CHANGED_VALUE")
+            val pts = clean
 
             // LOCKED style: rectilinear / Manhattan track with a LARGE rounded
             // fillet so each 90-degree turn sweeps through a near-semicircle
@@ -162,7 +171,9 @@ class RouteBoardView : View {
                 val d1x = p1[0] - p0[0]; val d1y = p1[1] - p0[1]
                 val d2x = p2[0] - p1[0]; val d2y = p2[1] - p1[1]
                 val dot = d1x * d2x + d1y * d2y
-                if (dot <= 0f) {
+                // Only a true reversal (180°, dot<0) draws a sharp joint; a 90°
+                // turn (dot==0) must sweep through the rounded fillet.
+                if (dot < 0f) {
                     curve.lineTo(p1[0], p1[1])
                     continue
                 }

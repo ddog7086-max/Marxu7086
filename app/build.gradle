@@ -11,8 +11,8 @@ android {
         applicationId 'com.example.padcombo'
         minSdk 26
         targetSdk 34
-        versionCode 38
-        versionName '4.6'
+        versionCode 39
+        versionName '4.7'
     }
 
     // Fixed keystore committed in the repo so every CI build shares the SAME
