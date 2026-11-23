@@ -107,7 +107,7 @@ class RouteBoardView : View {
             // drag path and clear count are unchanged.
             val cell = minOf(cellW, cellH)
             val seen = HashMap<Int, Int>()
-            val pts = path.mapIndexed { i, idx ->
+            val offsetPts = path.mapIndexed { i, idx ->
                 val c = center(idx)
                 val k = (seen[idx] ?: 0) + 1
                 seen[idx] = k
@@ -125,12 +125,25 @@ class RouteBoardView : View {
                 } else c
             }
 
-            // LOCKED style (per user request): rectilinear / Manhattan track
-            // (horizontal & vertical between cell centres) with rounded filleted
-            // corners at each turn, matching the reference guide. Do not switch
-            // back to a free-form bezier curve.
+            // Orthogonalise: every move must be purely horizontal or vertical.
+            // Split any diagonal jump into an H-then-V elbow so the track runs
+            // parallel to the grid (no diagonal slash, no sharp Y-junction).
+            val pts = ArrayList<FloatArray>()
+            pts.add(offsetPts[0])
+            for (i in 1 until offsetPts.size) {
+                val p = pts.last()
+                val c = offsetPts[i]
+                if (Math.abs(c[0] - p[0]) > 1f && Math.abs(c[1] - p[1]) > 1f) {
+                    pts.add(floatArrayOf(c[0], p[1]))
+                }
+                pts.add(c)
+            }
+
+            // LOCKED style: rectilinear / Manhattan track with a LARGE rounded
+            // fillet so each 90-degree turn sweeps through a near-semicircle
+            // instead of a sharp corner. Do not use free-form bezier.
             val curve = Path()
-            val corner = cell * 0.18f
+            val corner = cell * 0.40f
             fun lerp(a: FloatArray, b: FloatArray, t: Float) = floatArrayOf(
                 a[0] + (b[0] - a[0]) * t,
                 a[1] + (b[1] - a[1]) * t,
@@ -155,8 +168,8 @@ class RouteBoardView : View {
             }
             curve.lineTo(pts.last()[0], pts.last()[1])
 
-            // Reference-guide grey pipe: a dark-grey outer stroke with a thin
-            // light core, made darker/thicker so it reads over bright orbs.
+            // Reference-guide grey pipe: dark-grey outer stroke; inner core fades
+            // white -> black linearly along the route from start to end.
             val outerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 strokeWidth = 12f
                 strokeCap = Paint.Cap.ROUND
@@ -167,7 +180,12 @@ class RouteBoardView : View {
                 strokeWidth = 6f
                 strokeCap = Paint.Cap.ROUND
                 style = Paint.Style.STROKE
-                color = Color.argb(a, 225, 223, 220)
+                shader = android.graphics.LinearGradient(
+                    pts[0][0], pts[0][1], pts.last()[0], pts.last()[1],
+                    Color.argb(a, 255, 255, 255),
+                    Color.argb(a, 0, 0, 0),
+                    android.graphics.Shader.TileMode.CLAMP
+                )
             }
             canvas.drawPath(curve, outerPaint)
             canvas.drawPath(curve, innerPaint)
